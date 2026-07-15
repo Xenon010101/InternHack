@@ -1,180 +1,321 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { prisma } from "../../database/db.js";
-import { OpensourceController } from "./opensource.controller.js";
-import { OpensourceProgramController } from "./opensource-program.controller.js";
+import {
+  approveRequestOverrideSchema,
+  opensourceListQuerySchema,
+  repoIdSchema,
+  submitRepoRequestSchema,
+} from "./opensource.validation.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
+import { sendEmail } from "../../utils/email.utils.js";
+import { repoRequestSubmittedHtml, repoRequestApprovedHtml } from "../../utils/email-templates.js";
+import { parsePagination } from "../../utils/pagination.utils.js";
 
 export const opensourceRouter = Router();
-const controller = new OpensourceController();
-const programController = new OpensourceProgramController();
 
-// ─── Public Routes ─────────────────────────────────────────────
+function addMonthsUTC(date: Date, months: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+}
 
-// Global stats (cached, independent of pagination/filters)
-opensourceRouter.get("/stats", (req, res, next) => controller.getGlobalStats(req, res, next));
+function getMonthKeyUTC(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
 
-// List repos with optional filters
-opensourceRouter.get("/", (req, res, next) => controller.listRepos(req, res, next));
+function getMonthLabelUTC(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" }).format(date);
+}
 
-// Get all unique languages
-opensourceRouter.get("/languages", (req, res, next) => controller.getLanguages(req, res, next));
-
-// Get GSoC organizations
-opensourceRouter.get("/gsoc/orgs", (req, res, next) => controller.getGsocOrgs(req, res, next));
-
-// Get recommended repos for student based on skills
-opensourceRouter.get("/recommended", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getRecommendedRepos(req, res, next),
-);
-// NOTE: these must be registered BEFORE /:id to avoid route conflicts
-
-opensourceRouter.post("/requests", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.submitRepoRequest(req, res, next),
-);
-
-opensourceRouter.get("/requests/mine", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getMyRepoRequests(req, res, next),
-);
-
-opensourceRouter.get("/analytics/trend", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getStudentContributionTrend(req, res, next),
-);
-
-opensourceRouter.get("/analytics/hacktoberfest", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getHacktoberfestProgress(req, res, next),
-);
-
-opensourceRouter.get("/activity", authMiddleware, (req, res, next) =>
-  controller.getActivityHeatmap(req, res, next),
-);
-
-opensourceRouter.get("/premium/status", authMiddleware, requireRole("STUDENT"), async (req, res, next) => {
+// Public: list repos with optional filters
+opensourceRouter.get("/", async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.id },
-      select: { subscriptionPlan: true, subscriptionStatus: true, subscriptionEndDate: true },
+    const parsed = opensourceListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid query parameters", errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const { page, limit, search, language, difficulty, domain, sortBy, sortOrder } = parsed.data;
+
+    const where: Record<string, unknown> = {};
+    if (language) where["language"] = { equals: language, mode: "insensitive" };
+    if (difficulty) where["difficulty"] = difficulty;
+    if (domain) where["domain"] = domain;
+    if (search) {
+      // Prisma's scalar-list filters can't do case-insensitive substring match
+      // on array elements, so resolve tag matches via a raw ILIKE-on-unnest
+      // subquery and merge the matching ids into the OR clause.
+      const tagMatches = await prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "opensourceRepo"
+        WHERE EXISTS (
+          SELECT 1 FROM unnest(tags) AS t WHERE t ILIKE ${`%${search}%`}
+        )
+      `;
+      const tagMatchIds = tagMatches.map((r) => r.id);
+
+      where["OR"] = [
+        { name: { contains: search, mode: "insensitive" } },
+        { owner: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { language: { contains: search, mode: "insensitive" } },
+        ...(tagMatchIds.length > 0 ? [{ id: { in: tagMatchIds } }] : []),
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [repos, total] = await Promise.all([
+      prisma.opensourceRepo.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      prisma.opensourceRepo.count({ where }),
+    ]);
+
+    res.json({
+      repos,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
-    const isPremium =
-      user !== null &&
-      (user.subscriptionPlan === "MONTHLY" || user.subscriptionPlan === "YEARLY") &&
-      user.subscriptionStatus === "ACTIVE" &&
-      (!user.subscriptionEndDate || user.subscriptionEndDate > new Date());
-    res.json({ isPremium });
   } catch (err) {
     next(err);
   }
 });
 
-opensourceRouter.get("/first-pr/progress", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getFirstPrProgress(req, res, next),
-);
+// ─── Repo Requests (Student-authenticated) ───────────────────────
+// NOTE: these must be registered BEFORE /:id to avoid route conflicts
 
-opensourceRouter.patch("/first-pr/progress", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.patchFirstPrProgress(req, res, next),
-);
+// Submit a repo request
+opensourceRouter.post("/requests", authMiddleware, requireRole("STUDENT"), async (req, res, next) => {
+  try {
+    const parsed = submitRepoRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
 
-// ─── Guide Progress Routes ───────────────────────────────────────
+    const existing = await prisma.repoRequest.findFirst({
+      where: { url: parsed.data.url, status: { in: ["PENDING", "APPROVED"] } },
+    });
+    if (existing) {
+      res.status(409).json({ message: "This repository has already been submitted" });
+      return;
+    }
 
-opensourceRouter.get("/guide-progress/:guideSlug", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getGuideProgress(req, res, next),
-);
+    const request = await prisma.repoRequest.create({
+      data: { ...parsed.data, userId: req.user!.id },
+      include: { user: { select: { name: true, email: true } } },
+    });
 
-opensourceRouter.patch("/guide-progress/:guideSlug", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.patchGuideProgress(req, res, next),
-);
+    // Send confirmation email
+    try {
+      await sendEmail({
+        to: request.user.email,
+        subject: "Repo Request Received, InternHack",
+        html: repoRequestSubmittedHtml(request.user.name, request.name, request.owner),
+      });
+    } catch { /* email failure is non-blocking */ }
 
-// ─── Certificate Routes ─────────────────────────────────────────
-opensourceRouter.post("/certificate/issue", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.issueCertificate(req, res, next),
-);
-opensourceRouter.get("/certificate/:token/og", (req, res, next) =>
-  controller.getCertificateOgImage(req, res, next),
-);
-opensourceRouter.get("/certificate/:token", (req, res, next) =>
-  controller.getCertificate(req, res, next),
-);
+    res.status(201).json({ message: "Repository request submitted successfully", request });
+  } catch (err) {
+    next(err);
+  }
+});
 
-opensourceRouter.post("/guide-feedback", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.submitGuideFeedback(req, res, next),
-);
+// Get my repo requests
+opensourceRouter.get("/requests/mine", authMiddleware, requireRole("STUDENT"), async (req, res, next) => {
+  try {
+    const requests = await prisma.repoRequest.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: "desc" },
+    });
 
-// ─── Student: Bookmarks ─────────────────────────────────────────
+    // For approved requests, look up the corresponding InternHack repo ID so
+    // the client can open the repo detail popup directly.
+    const approvedUrls = requests
+      .filter((r) => r.status === "APPROVED")
+      .map((r) => r.url);
 
-opensourceRouter.get("/bookmarks", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.getBookmarks(req, res, next),
-);
+    const approvedRepos =
+      approvedUrls.length > 0
+        ? await prisma.opensourceRepo.findMany({
+            where: { url: { in: approvedUrls } },
+            select: { id: true, url: true },
+          })
+        : [];
 
-opensourceRouter.post("/bookmarks", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.addBookmark(req, res, next),
-);
+    const repoIdByUrl = new Map(approvedRepos.map((r) => [r.url, r.id]));
 
-// POST /bookmarks/migrate — bulk-import localStorage bookmarks to the server
-opensourceRouter.post("/bookmarks/migrate", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.bulkMigrateBookmarks(req, res, next),
-);
+    const enriched = requests.map((r) => ({
+      ...r,
+      repoId: r.status === "APPROVED" ? (repoIdByUrl.get(r.url) ?? null) : null,
+    }));
 
-opensourceRouter.delete("/bookmarks/:repoId", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  controller.removeBookmark(req, res, next),
-);
+    res.json({ requests: enriched });
+  } catch (err) {
+    next(err);
+  }
+});
 
-// ─── Programs ────────────────────────────────────────────────────
+// Student contribution trend
+opensourceRouter.get("/analytics/trend", authMiddleware, requireRole("STUDENT"), async (req, res, next) => {
+  try {
+    const now = new Date();
+    const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const startMonth = addMonthsUTC(currentMonthStart, -5);
+    const endMonth = addMonthsUTC(currentMonthStart, 1);
 
-// Public program listing (no auth required)
-opensourceRouter.get("/programs", (req, res, next) =>
-  programController.listPrograms(req, res, next),
-);
+    const approvedRequests = await prisma.repoRequest.findMany({
+      where: {
+        userId: req.user!.id,
+        status: "APPROVED",
+        updatedAt: { gte: startMonth, lt: endMonth },
+      },
+      select: { updatedAt: true },
+    });
 
-opensourceRouter.get("/programs/:slug", (req, res, next) =>
-  programController.getProgram(req, res, next),
-);
+    const countsByMonth = new Map<string, number>();
+    for (const request of approvedRequests) {
+      const monthKey = getMonthKeyUTC(request.updatedAt);
+      countsByMonth.set(monthKey, (countsByMonth.get(monthKey) ?? 0) + 1);
+    }
 
-opensourceRouter.get("/programs/:slug/ics", (req, res, next) =>
-  programController.downloadIcs(req, res, next),
-);
+    const trend = Array.from({ length: 6 }, (_, index) => {
+      const monthStart = addMonthsUTC(startMonth, index);
+      const monthKey = getMonthKeyUTC(monthStart);
+      return {
+        month: monthKey,
+        label: getMonthLabelUTC(monthStart),
+        count: countsByMonth.get(monthKey) ?? 0,
+      };
+    });
 
-// Student program tracking
-opensourceRouter.post("/programs/track", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  programController.toggleProgram(req, res, next),
-);
-
-opensourceRouter.get("/programs/tracked/mine", authMiddleware, requireRole("STUDENT"), (req, res, next) =>
-  programController.getTrackedPrograms(req, res, next),
-);
-
-// Admin program management
-opensourceRouter.post("/programs/manage", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  programController.createProgram(req, res, next),
-);
-
-opensourceRouter.put("/programs/manage/:id", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  programController.updateProgram(req, res, next),
-);
-
-opensourceRouter.delete("/programs/manage/:id", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  programController.deleteProgram(req, res, next),
-);
+    res.json({ trend, total: approvedRequests.length });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Admin: Manage Repo Requests ─────────────────────────────────
 
-opensourceRouter.get("/requests/all", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  controller.getAllRepoRequests(req, res, next),
-);
+// List all repo requests
+opensourceRouter.get("/requests/all", authMiddleware, requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const { page, limit, skip } = parsePagination(req);
+    const status = req.query.status as string | undefined;
 
-opensourceRouter.put("/requests/:id/approve", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  controller.approveRepoRequest(req, res, next),
-);
+    const where: Record<string, unknown> = {};
+    if (status && ["PENDING", "APPROVED", "REJECTED"].includes(status)) {
+      where.status = status;
+    }
 
-opensourceRouter.put("/requests/:id/reject", authMiddleware, requireRole("ADMIN"), (req, res, next) =>
-  controller.rejectRepoRequest(req, res, next),
-);
+    const [requests, total] = await Promise.all([
+      prisma.repoRequest.findMany({
+        where,
+        include: { user: { select: { id: true, name: true, email: true, profilePic: true } } },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.repoRequest.count({ where }),
+    ]);
 
-// ─── Public: Single Repo ───────────────────────────────────────
+    res.json({ requests, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (err) {
+    next(err);
+  }
+});
 
-// Must be AFTER all /requests/* and /first-pr/* routes.
-// /:owner/:name routes must appear BEFORE /:id so two-segment paths resolve correctly.
-opensourceRouter.get("/:owner/:name/issues", (req, res, next) =>
-  controller.getRepoGoodFirstIssues(req, res, next),
-);
-opensourceRouter.get("/:owner/:name", (req, res, next) => controller.getRepoByOwnerAndName(req, res, next));
-opensourceRouter.get("/:id", (req, res, next) => controller.getRepoById(req, res, next));
+// Approve a repo request
+opensourceRouter.put("/requests/:id/approve", authMiddleware, requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ message: "Invalid request ID" }); return; }
+
+    const overridesParsed = approveRequestOverrideSchema.safeParse(req.body);
+    if (!overridesParsed.success) {
+      res.status(400).json({ message: "Validation failed", errors: overridesParsed.error.flatten().fieldErrors });
+      return;
+    }
+    const overrides = overridesParsed.data;
+
+    const request = await prisma.repoRequest.findUnique({
+      where: { id },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!request) { res.status(404).json({ message: "Request not found" }); return; }
+    if (request.status !== "PENDING") { res.status(400).json({ message: "Request is not pending" }); return; }
+
+    // Create the actual repo from the request
+    const repo = await prisma.opensourceRepo.create({
+      data: {
+        name: overrides.name ?? request.name,
+        owner: request.owner,
+        description: overrides.description ?? request.description,
+        language: request.language,
+        url: request.url,
+        domain: overrides.domain ?? request.domain,
+        difficulty: overrides.difficulty ?? request.difficulty,
+        techStack: request.techStack,
+        tags: overrides.tags ?? request.tags,
+      },
+    });
+
+    // Update request status
+    await prisma.repoRequest.update({
+      where: { id },
+      data: { status: "APPROVED", adminNote: overrides.adminNote ?? null },
+    });
+
+    // Send approval email
+    try {
+      await sendEmail({
+        to: request.user.email,
+        subject: "Your Repo Has Been Approved, InternHack",
+        html: repoRequestApprovedHtml(request.user.name, overrides.name ?? request.name, request.owner),
+      });
+    } catch { /* email failure is non-blocking */ }
+
+    res.json({ message: "Request approved and repository added", repo });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Reject a repo request
+opensourceRouter.put("/requests/:id/reject", authMiddleware, requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ message: "Invalid request ID" }); return; }
+
+    const request = await prisma.repoRequest.findUnique({ where: { id } });
+    if (!request) { res.status(404).json({ message: "Request not found" }); return; }
+    if (request.status !== "PENDING") { res.status(400).json({ message: "Request is not pending" }); return; }
+
+    await prisma.repoRequest.update({
+      where: { id },
+      data: { status: "REJECTED", adminNote: req.body.adminNote || null },
+    });
+
+    res.json({ message: "Request rejected" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Public: get single repo (must be AFTER /requests/* routes)
+opensourceRouter.get("/:id", async (req, res, next) => {
+  try {
+    const parsed = repoIdSchema.safeParse(req.params);
+    if (!parsed.success) { res.status(400).json({ message: "Invalid repo ID" }); return; }
+    const { id } = parsed.data;
+
+    const repo = await prisma.opensourceRepo.findUnique({ where: { id } });
+    if (!repo) { res.status(404).json({ message: "Repository not found" }); return; }
+
+    res.json({ repo });
+  } catch (err) {
+    next(err);
+  }
+});

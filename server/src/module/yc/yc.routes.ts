@@ -24,10 +24,6 @@ interface Founder {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Per-slug scrape lock: prevents concurrent requests for the same company
-// from triggering duplicate scrapes (TOCTOU race).
-const pendingScrapes = new Map<string, Promise<void>>();
-
 async function scrapeYCPage(slug: string) {
   const url = `https://www.ycombinator.com/companies/${slug}`;
   const res = await fetch(url, {
@@ -266,22 +262,13 @@ router.get("/companies/:slug", cacheMiddleware(1800, "yc:detail"), async (req: R
       return;
     }
 
-    // If not scraped yet or stale, scrape on demand
+    // If not scraped yet or stale, scrape in background and update
     if (needsScrape(company)) {
-      // Per-slug lock: if a scrape for this slug is already in flight,
-      // await it and return the freshly-updated company data.
-      const inFlight = pendingScrapes.get(company.slug);
-      if (inFlight) {
-        await inFlight;
-        const fresh = await prisma.ycCompany.findFirst({ where: { slug: company.slug } });
-        res.json(fresh ?? company);
-        return;
-      }
-
-      const scrapePromise = (async () => {
+      // Don't block the response - fire and forget, but also try to return fresh data
+      try {
         const scraped = await scrapeYCPage(company.slug);
         if (scraped) {
-          await prisma.ycCompany.update({
+          const updated = await prisma.ycCompany.update({
             where: { id: company.id },
             data: {
               founders: scraped.founders.length > 0 ? (scraped.founders as unknown as Prisma.InputJsonValue) : undefined,
@@ -290,30 +277,19 @@ router.get("/companies/:slug", cacheMiddleware(1800, "yc:detail"), async (req: R
               scrapedAt: new Date(),
             },
           });
-        } else {
-          await prisma.ycCompany.update({
-            where: { id: company.id },
-            data: { scrapedAt: new Date() },
-          });
+          res.json(updated);
+          return;
         }
-      })();
-
-      pendingScrapes.set(company.slug, scrapePromise);
-
-      try {
-        await scrapePromise;
-        const fresh = await prisma.ycCompany.findFirst({ where: { slug: company.slug } });
-        res.json(fresh ?? company);
       } catch (scrapeErr) {
         logger.error(`Scrape failed for ${company.slug}`, scrapeErr);
+        // Mark as scraped to avoid retrying immediately
         await prisma.ycCompany
-          .update({ where: { id: company.id }, data: { scrapedAt: new Date() } })
-          .catch((err) => console.error("Failed to update scrapedAt:", err));
-        res.json(company);
-      } finally {
-        pendingScrapes.delete(company.slug);
+          .update({
+            where: { id: company.id },
+            data: { scrapedAt: new Date() },
+          })
+          .catch(() => {});
       }
-      return;
     }
 
     res.json(company);

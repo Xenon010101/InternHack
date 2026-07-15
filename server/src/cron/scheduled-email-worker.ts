@@ -1,7 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../database/db.js";
 import { sendEmail } from "../utils/email.utils.js";
-import { buildUnsubscribeUrl } from "../utils/unsubscribe.utils.js";
 import { roadmapDay10EmailHtml } from "../utils/email-templates.js";
 import { withAdvisoryLock } from "../utils/cron-lock.js";
 
@@ -20,7 +19,7 @@ interface Day10Payload {
  * Drain due rows from scheduledEmail. Each kind has its own renderer.
  * Idempotent: a row is considered done once sentAt is set.
  */
-export async function drainScheduledEmails(): Promise<void> {
+async function drainScheduledEmails(): Promise<void> {
   const now = new Date();
   const due = await prisma.scheduledEmail.findMany({
     where: {
@@ -31,7 +30,7 @@ export async function drainScheduledEmails(): Promise<void> {
     orderBy: { sendAt: "asc" },
     take: BATCH_SIZE,
     include: {
-      user: { select: { id: true, name: true, email: true, isActive: true, unsubscribeDigest: true } },
+      user: { select: { id: true, name: true, email: true, isActive: true } },
     },
   });
 
@@ -39,11 +38,11 @@ export async function drainScheduledEmails(): Promise<void> {
   console.log(`[ScheduledEmail] Processing ${due.length} due email(s)`);
 
   for (const row of due) {
-    if (!row.user.isActive || row.user.unsubscribeDigest) {
+    if (!row.user.isActive) {
       // Skip and mark sent so we don't keep retrying
       await prisma.scheduledEmail.update({
         where: { id: row.id },
-        data: { sentAt: now, lastError: row.user.isActive ? "user unsubscribed" : "user inactive" },
+        data: { sentAt: now, lastError: "user inactive" },
       });
       continue;
     }
@@ -132,7 +131,6 @@ async function sendDay10(
       plannedTopics,
       nextTopicSlug: nextTopic?.slug ?? null,
     }),
-    unsubscribeUrl: buildUnsubscribeUrl(user.id),
   });
 }
 

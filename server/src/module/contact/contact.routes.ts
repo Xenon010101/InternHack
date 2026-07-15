@@ -2,11 +2,10 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../../database/db.js";
 import { contactSchema } from "./contact.validation.js";
-import { contactLimiter } from "../../middleware/rate-limit.middleware.js";
 
 export const contactRouter = Router();
 
-contactRouter.post("/", contactLimiter, async (req: Request, res: Response) => {
+contactRouter.post("/", async (req: Request, res: Response) => {
   try {
     const parsed = contactSchema.safeParse(req.body);
     if (!parsed.success) {

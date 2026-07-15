@@ -43,6 +43,8 @@ This guide walks you through everything from setting up the project to submittin
 | PostgreSQL | 14+ | Database |
 | Git | 2.30+ | Version control |
 
+**Docker Compose shortcut:** You can run Postgres + API + client with only Docker by following the README “Docker Compose (alternative)” section (root `.env.example` plus `docker compose up`). That path does **not** use Redis — the app stack is PostgreSQL only.
+
 You'll also need:
 - A **Google Cloud Console** project for OAuth (client ID)
 - A **Gemini API key** ([free at aistudio.google.com](https://aistudio.google.com/apikey))
@@ -57,7 +59,13 @@ cd InternHack
 
 ### Step 2: Set up environment variables
 
-Copy the client and server templates:
+**Docker Compose:** copy the template at the repo root:
+
+```bash
+cp .env.example .env
+```
+
+**Classic setup:** separate client and server copies:
 
 ```bash
 cp server/.env.example server/.env
@@ -124,6 +132,7 @@ npm run seed
 > | Email | Password | Role | Plan | Notes |
 > |---|---|---|---|---|
 > | `admin@internhack.xyz` | `Test@1234` | Admin | Free | Super-admin with full dashboard access |
+> | `recruiter@internhack.xyz` | `Test@1234` | Recruiter | Free | Hiring Manager at TechCorp — can post and manage jobs |
 > | `aarav@example.com` | `Test@1234` | Student | Free | IIT Delhi, JavaScript/React/Node.js |
 > | `priya@example.com` | `Test@1234` | Student | Free | NIT Trichy, Python/Django/ML |
 > | `rohan@example.com` | `Test@1234` | Student | Free | BITS Pilani, Java/Spring Boot/AWS |
@@ -255,7 +264,7 @@ git push origin feat/your-feature-name
 
 1. Create the page component in `client/src/module/<area>/<PageName>.tsx`
 2. Add a lazy import in `client/src/App.tsx`
-3. Add the route in the appropriate route group (public / student / admin)
+3. Add the route in the appropriate route group (public / student / recruiter / admin)
 
 ### Modifying the database
 

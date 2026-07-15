@@ -20,8 +20,6 @@ import { canonicalUrl } from "../../../lib/seo.utils";
 import api from "../../../lib/axios";
 import { queryKeys } from "../../../lib/query-keys";
 import type { Pagination } from "../../../lib/types";
-import { CARD_BASE } from "../../../lib/card-styles";
-
 
 interface Internship {
   id: number;
@@ -51,6 +49,8 @@ function Kicker({ children }: { children: React.ReactNode }) {
 }
 
 function InternshipCard({ internship }: { internship: Internship }) {
+  const cardClassName = "group relative flex flex-col bg-white dark:bg-stone-900 p-5 rounded-md border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/30 transition-colors h-full no-underline";
+
   const cardContent = (
     <>
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -98,13 +98,13 @@ function InternshipCard({ internship }: { internship: Internship }) {
 
   if (internship.applyUrl) {
     return (
-      <a href={internship.applyUrl} target="_blank" rel="noopener noreferrer" className={CARD_BASE}>
+      <a href={internship.applyUrl} target="_blank" rel="noopener noreferrer" className={cardClassName}>
         {cardContent}
       </a>
     );
   }
 
-  return <div className={CARD_BASE}>{cardContent}</div>;
+  return <div className={cardClassName}>{cardContent}</div>;
 }
 
 export default function GovInternshipsPage() {
@@ -160,11 +160,11 @@ export default function GovInternshipsPage() {
       <div className={`max-w-6xl mx-auto px-6 pb-16 ${isInsideLayout ? "" : "pt-24"}`}>
         {/* Back link */}
         <Link
-          to={isInsideLayout ? "/student/applications" : "/external-jobs"}
+          to={isInsideLayout ? "/student/jobs" : "/jobs"}
           className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-stone-500 hover:text-stone-900 dark:hover:text-stone-50 transition-colors mb-8 no-underline"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back
+          Back to jobs
         </Link>
 
         {/* Header */}

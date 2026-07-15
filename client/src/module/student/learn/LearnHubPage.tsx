@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
 import { motion } from "framer-motion";
-import { Search, ArrowUpRight, ArrowUpDown } from "lucide-react";
+import { Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { SEO } from "../../../components/SEO";
 import { canonicalUrl, SITE_URL } from "../../../lib/seo.utils";
 import { itemListSchema, breadcrumbSchema } from "../../../lib/structured-data";
@@ -12,9 +12,11 @@ import {
   type TrackCategory,
 } from "./tracks";
 import { TrackCard } from "./TrackCard";
-import { Button } from "../../../components/ui/button";
-import { EditorialDropdown } from "../../../components/ui/EditorialDropdown";
-import { useTrackProgress } from "./useTrackProgress";
+import {
+  RecommendationCard,
+  type WeakArea,
+} from "./components/RecommendationCard";
+import api from "../../../lib/axios";
 
 const CATEGORY_DESCRIPTION: Record<TrackCategory, string> = {
   practice: "Curated questions, animated lessons, and roadmaps to ace placements.",
@@ -24,74 +26,37 @@ const CATEGORY_DESCRIPTION: Record<TrackCategory, string> = {
   web3: "Smart contracts, DeFi, and blockchain from first principles.",
 };
 
-function getCompletedTrackIds(): string[] {
-  const completed: string[] = [];
-  const trackIds = TRACKS.map((t) => t.id);
-  for (const id of trackIds) {
-    try {
-      const raw = localStorage.getItem(`${id}-progress`);
-      if (!raw) continue;
-      const progress = JSON.parse(raw);
-      const values = Object.values(progress) as { completed?: boolean }[];
-      if (values.length > 0 && values.every((v) => v?.completed)) completed.push(id);
-    } catch {
-      // ignore
-    }
-  }
-  return completed;
-}
-
 export default function LearnHubPage() {
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<TrackCategory | "All">("All");
-  const [activeDifficulty, setActiveDifficulty] = useState("All");
-  const [sortBy, setSortBy] = useState("popular");
-  const { progressMap } = useTrackProgress();
-  const completedTrackIds = useMemo(() => getCompletedTrackIds(), []);
-const grouped = useMemo(() => {
-    let filtered = TRACKS;
 
+  const { data: recData, isLoading: loadingRecs } = useQuery<{ weakAreas: WeakArea[] }>({
+    queryKey: ["learn-recommendations"],
+    queryFn: () => api.get<{ weakAreas: WeakArea[] }>("/student/recommendations").then((r) => r.data),
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  });
+  const weakAreas = recData?.weakAreas ?? [];
+
+  const grouped = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (needle) {
-      filtered = filtered.filter(
-        (t) =>
-          t.title.toLowerCase().includes(needle) ||
-          t.description.toLowerCase().includes(needle) ||
-          t.tags?.some((tag) => tag.toLowerCase().includes(needle))
-      );
-    }
-
-    if (activeCategory !== "All") {
-      filtered = filtered.filter((t) => t.category === activeCategory);
-    }
-
-    if (activeDifficulty !== "All") {
-      filtered = filtered.filter(
-        (t) => t.difficulty?.toLowerCase() === activeDifficulty.toLowerCase()
-      );
-    }
-
-    filtered = [...filtered].sort((a, b) => {
-      if (sortBy === "alphabetical") {
-        return a.title.localeCompare(b.title);
-      } else if (sortBy === "recent") {
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      } else {
-        return (b.enrolledStudents || 0) - (a.enrolledStudents || 0);
-      }
-    });
+    const filtered = needle
+      ? TRACKS.filter(
+          (t) =>
+            t.title.toLowerCase().includes(needle) ||
+            t.description.toLowerCase().includes(needle),
+        )
+      : TRACKS;
 
     const byCategory = new Map<TrackCategory, typeof TRACKS>();
     for (const t of filtered) {
       if (!byCategory.has(t.category)) byCategory.set(t.category, []);
       byCategory.get(t.category)!.push(t);
     }
-    
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
       tracks: byCategory.get(cat) ?? [],
     })).filter((g) => g.tracks.length > 0);
-  }, [search, activeCategory, activeDifficulty, sortBy]);
+  }, [search]);
 
   const totalTracks = TRACKS.length;
   const totalShown = grouped.reduce((sum, g) => sum + g.tracks.length, 0);
@@ -164,39 +129,43 @@ const grouped = useMemo(() => {
         </div>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-6 space-y-3"
-      >
-        <Link
-          to="/learn/placement-prep"
-          className="group flex items-center justify-between bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-md px-5 py-4 hover:border-lime-400 dark:hover:border-lime-400 transition-colors no-underline"
+      {/* Recommended for you */}
+      {!loadingRecs && weakAreas.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="mb-14 p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-md"
         >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-md bg-lime-100 dark:bg-lime-900/20 border border-lime-300 dark:border-lime-800/50 flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold text-lime-700 dark:text-lime-400">P</span>
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 bg-lime-400" />
+              <span className="text-xs font-mono uppercase tracking-widest text-stone-500">
+                recommended for you
+              </span>
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-stone-900 dark:text-stone-50 group-hover:text-lime-700 dark:group-hover:text-lime-400 transition-colors">
-                Placement Prep Plans
-              </p>
-              <p className="text-xs text-stone-500 dark:text-stone-400 truncate">
-                Structured 30, 60, and 90-day learning schedules utilizing DSA, Aptitude, Core & Mock Exams
-              </p>
-            </div>
+            <span className="text-xs font-mono uppercase tracking-widest text-stone-400">
+              {weakAreas.length} area{weakAreas.length !== 1 ? "s" : ""} to strengthen
+            </span>
           </div>
-          <ArrowUpRight className="w-4 h-4 text-stone-400 group-hover:text-lime-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all shrink-0" />
-        </Link>
-      </motion.div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {weakAreas.slice(0, 6).map((area, i) => (
+              <RecommendationCard
+                key={`${area.type}-${area.topic}-${i}`}
+                area={area}
+                index={i}
+              />
+            ))}
+          </div>
+        </motion.section>
+      )}
 
-      {/* Search & Filters */}
+      {/* Search */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="mb-12 space-y-4"
+        className="mb-12"
       >
         <div className="relative">
           <Search
@@ -205,68 +174,14 @@ const grouped = useMemo(() => {
           />
           <input
             type="text"
-            placeholder="Search tracks, skills, or keywords..."
+            placeholder="Search tracks..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search learning tracks"
             className="w-full pl-11 pr-4 py-3 bg-white dark:bg-stone-900 border border-stone-300 dark:border-white/10 rounded-md focus:outline-none focus:border-lime-400 transition-colors text-sm text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600"
           />
         </div>
-
-        {/* Filter Controls Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            
-            {/* Category Tabs */}
-            <div className="flex flex-wrap items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-md">
-              <Button
-                onClick={() => setActiveCategory("All")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeCategory === "All" ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-white" : "bg-transparent border-transparent text-stone-500 hover:bg-transparent hover:text-stone-700 dark:hover:text-stone-300"}`}
-              >
-                All
-              </Button>
-              {CATEGORY_ORDER.map((cat) => (
-                <Button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${activeCategory === cat ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-white" : "bg-transparent border-transparent text-stone-500 hover:bg-transparent hover:text-stone-700 dark:hover:text-stone-300"}`}
-                >
-                  {CATEGORY_LABEL[cat] || cat}
-                </Button>
-              ))}
-            </div>
-
-            {/* Difficulty Chips */}
-            <div className="flex items-center gap-2">
-              {["All", "Beginner", "Intermediate", "Advanced"].map((level) => (
-              <Button
-                key={level}
-                onClick={() => setActiveDifficulty(level)}
-                className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${activeDifficulty === level ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100" : "bg-transparent text-stone-500 border-stone-300 dark:border-stone-700 hover:border-stone-400"}`}
-              >
-                {level}
-              </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Sort Dropdown */}
-          <div className="shrink-0">
-            <EditorialDropdown
-              icon={<ArrowUpDown className="w-3.5 h-3.5" />}
-              label="sort by"
-              value={sortBy}
-              onChange={setSortBy}
-              options={[
-                { value: "popular", label: "Most Popular" },
-                { value: "alphabetical", label: "Alphabetical" },
-                { value: "recent", label: "Recently Added" },
-              ]}
-            />
-          </div>
-        </div>
-
-        {(search || activeCategory !== "All" || activeDifficulty !== "All") && (
+        {search && (
           <p className="mt-2 text-xs font-mono uppercase tracking-widest text-stone-500">
             {totalShown} match{totalShown === 1 ? "" : "es"}
           </p>
@@ -308,7 +223,7 @@ const grouped = useMemo(() => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {group.tracks.map((track, idx) => (
-                  <TrackCard key={track.id} track={track} index={idx} completedTrackIds={completedTrackIds} progress={progressMap[track.id]} />
+                  <TrackCard key={track.id} track={track} index={idx} />
                 ))}
               </div>
             </section>

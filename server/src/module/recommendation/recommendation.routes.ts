@@ -8,4 +8,4 @@ export const recommendationRouter = Router();
 
 recommendationRouter.use(authMiddleware, requireRole("STUDENT"));
 
-recommendationRouter.get("/", usageLimit("ATS_SCORE", "monthly"), getRecommendationsHandler);
+recommendationRouter.get("/", usageLimit("ATS_SCORE"), getRecommendationsHandler);

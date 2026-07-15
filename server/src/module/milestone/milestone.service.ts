@@ -1,6 +1,5 @@
 import { prisma } from "../../database/db.js";
 import { sendEmail } from "../../utils/email.utils.js";
-import { buildUnsubscribeUrl } from "../../utils/unsubscribe.utils.js";
 import { milestoneEmailHtml } from "../../utils/email-templates.js";
 import { createLogger } from "../../utils/logger.js";
 
@@ -147,13 +146,9 @@ async function tryRecordAndSend(
   try {
     const user = await prisma.user.findUnique({
       where: { id: studentId },
-      select: { name: true, email: true, unsubscribeDigest: true },
+      select: { name: true, email: true },
     });
     if (!user) return false;
-    if (user.unsubscribeDigest) {
-      logger.info(`Skipping ${milestoneType}/${milestoneKey} email for student ${studentId} (unsubscribed)`);
-      return false;
-    }
 
     const content = getMilestoneContent(milestoneType, milestoneKey);
     await sendEmail({
@@ -165,7 +160,6 @@ async function tryRecordAndSend(
         content.message,
         content.ctaText
       ),
-      unsubscribeUrl: buildUnsubscribeUrl(studentId),
     });
     logger.info(
       `Sent ${milestoneType}/${milestoneKey} email to student ${studentId}`

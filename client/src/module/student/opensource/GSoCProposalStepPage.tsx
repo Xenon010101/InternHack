@@ -21,8 +21,6 @@ import { SEO } from "../../../components/SEO";
 import { Button } from "../../../components/ui/button";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import guideData from "./data/gsoc-proposal-guide.json";
-import { notifyLearningPathProgressChanged } from "./learning-paths.data";
-import GSoCProposalAIReview from "./GSoCProposalAIReview";
 
 // ─── Types ─────────────────────────────────────────────────────
 interface Resource { title: string; url: string; type: string }
@@ -90,7 +88,6 @@ export default function GSoCProposalStepPage() {
       if (!step) return next;
       if (next.has(step.id)) next.delete(step.id); else next.add(step.id);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* */ }
-      notifyLearningPathProgressChanged();
       return next;
     });
   }, [step]);
@@ -175,9 +172,6 @@ export default function GSoCProposalStepPage() {
             ) : <span />}
           </div>
         </div>
-
-        {/* AI Proposal Reviewer Panel */}
-        <GSoCProposalAIReview />
       </motion.div>
 
       {/* Content sections */}

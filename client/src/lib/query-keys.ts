@@ -1,4 +1,12 @@
 export const queryKeys = {
+  // Jobs
+  jobs: {
+    all: ["jobs"] as const,
+    list: (params?: Record<string, string | number | boolean | undefined>) =>
+      ["jobs", "list", params] as const,
+    detail: (id: string | number) => ["jobs", "detail", id] as const,
+    related: (id: string | number) => ["jobs", "related", id] as const,
+  },
   // Hackathons
   hackathons: {
     all: ["hackathons"] as const,
@@ -10,17 +18,22 @@ export const queryKeys = {
   applications: {
     all: ["applications"] as const,
     mine: () => ["applications", "mine"] as const,
+    progress: (id: string | number) =>
+      ["applications", "progress", id] as const,
+    statusByJob: (jobId: string | number) =>
+      ["applications", "status-by-job", jobId] as const,
   },
 
   // ATS
   ats: {
     all: ["ats"] as const,
     usage: () => ["ats", "usage"] as const,
+    history: () => ["ats", "history"] as const,
   },
   coverLetter: {
-    history: () => ["cover-letter", "history"] as const,
-    detail: (id: number) => ["cover-letter", "detail", id] as const,
-  },
+  history: ()           => ["cover-letter", "history"] as const,
+  detail:  (id: number) => ["cover-letter", "detail", id] as const,
+},
 
   // Companies
   companies: {
@@ -29,7 +42,8 @@ export const queryKeys = {
       ["companies", "list", params] as const,
     cities: () => ["companies", "cities"] as const,
     detail: (id: string | number) => ["companies", "detail", id] as const,
-    reviews: (id: string | number) => ["companies", "reviews", id] as const,
+    reviews: (id: string | number) =>
+      ["companies", "reviews", id] as const,
   },
 
   // Admin
@@ -54,6 +68,12 @@ export const queryKeys = {
     landing: () => ["stats", "landing"] as const,
   },
 
+  // Recruiter
+  recruiter: {
+    talentSearch: (params?: Record<string, string | number>) =>
+      ["recruiter", "talent-search", params] as const,
+  },
+
   // GSoC
   gsoc: {
     list: (params?: Record<string, string | number>) =>
@@ -74,17 +94,13 @@ export const queryKeys = {
   // Open Source
   opensource: {
     all: ["opensource"] as const,
-    list: (params?: Record<string, string | number | string[]>) =>
+    list: (params?: Record<string, string | number>) =>
       ["opensource", "list", params] as const,
     detail: (id: number) => ["opensource", "detail", id] as const,
     myRequests: () => ["opensource", "my-requests"] as const,
-    trend: (startDate?: string, endDate?: string) =>
-      ["opensource", "trend", startDate, endDate] as const,
-    hacktoberfest: () => ["opensource", "hacktoberfest"] as const,
+    trend: () => ["opensource", "trend"] as const,
     allRequests: (params?: Record<string, string | number>) =>
       ["opensource", "all-requests", params] as const,
-    stats: () => ["opensource", "stats"] as const,
-    bookmarks: () => ["opensource", "bookmarks"] as const,
   },
 
   // Blog
@@ -95,6 +111,8 @@ export const queryKeys = {
     featured: () => ["blog", "featured"] as const,
     related: (slug: string) => ["blog", "related", slug] as const,
     byTags: (tags: string) => ["blog", "by-tags", tags] as const,
+    admin: (params?: Record<string, string | number>) =>
+      ["blog", "admin", params] as const,
   },
 
   // Aptitude
@@ -104,7 +122,6 @@ export const queryKeys = {
     companies: () => ["aptitude", "companies"] as const,
     company: (name: string) => ["aptitude", "company", name] as const,
     progress: () => ["aptitude", "progress"] as const,
-    weakAreas: () => ["aptitude", "weak-areas"] as const,
   },
 
   // Skill Tests
@@ -138,15 +155,21 @@ export const queryKeys = {
       ["scraped-jobs", "list", params] as const,
     detail: (id: string | number) => ["scraped-jobs", "detail", id] as const,
   },
-  
-  externalJobs: {
-    list: (params?: Record<string, string | number | undefined>) =>
-      ["external-job", "list", params] as const,
-    detail: (slug: string) => ["external-job", slug] as const,
-    similar: (id: string | number) => ["external-job-similar", id] as const,
-    status: (id: string | number) => ["external-job-status", id] as const,
+
+  // Professors
+  professors: {
+    list: (params?: Record<string, string | number>) =>
+      ["professors", "list", params] as const,
+    stats: () => ["professors", "stats"] as const,
   },
 
+  // Badges
+  badges: {
+    all: () => ["badges", "all"] as const,
+    my: () => ["badges", "my"] as const,
+    student: (id: number) => ["badges", "student", id] as const,
+    admin: (params?: Record<string, string | number>) => ["badges", "admin", params] as const,
+  },
 
   // Saved Candidates
   savedCandidates: {
@@ -173,10 +196,8 @@ export const queryKeys = {
     detail: (id: number) => ["interviews", "detail", id] as const,
     companies: (params?: Record<string, string | number>) =>
       ["interviews", "companies", params] as const,
-    companySummary: (slug: string) =>
-      ["interviews", "company-summary", slug] as const,
-    topQuestions: (slug: string) =>
-      ["interviews", "top-questions", slug] as const,
+    companySummary: (slug: string) => ["interviews", "company-summary", slug] as const,
+    topQuestions: (slug: string) => ["interviews", "top-questions", slug] as const,
   },
 
   // Funding Signals
@@ -192,29 +213,21 @@ export const queryKeys = {
   // DSA Practice
   dsa: {
     topics: (filter?: string) => ["dsa", "topics", filter] as const,
-    topic: (
-      slug: string,
-      page?: number,
-      filters?: Record<string, string | undefined>,
-    ) => ["dsa", "topic", slug, page, filters] as const,
+    topic: (slug: string, page?: number, filters?: Record<string, string | undefined>) => ["dsa", "topic", slug, page, filters] as const,
     problem: (slug: string) => ["dsa", "problem", slug] as const,
     progress: () => ["dsa", "progress"] as const,
     bookmarks: () => ["dsa", "bookmarks"] as const,
-    labels: () => ["dsa", "labels"] as const,
     companies: () => ["dsa", "companies"] as const,
-    company: (name: string, page?: number) =>
-      ["dsa", "company", name, page] as const,
-    companyTrackStats: (name: string) =>
-      ["dsa", "company", name, "track-stats"] as const,
+    company: (name: string, page?: number) => ["dsa", "company", name, page] as const,
+    patterns: () => ["dsa", "patterns"] as const,
+    pattern: (name: string, page?: number) => ["dsa", "pattern", name, page] as const,
     sheets: () => ["dsa", "sheets"] as const,
-    submissions: (problemId: number) =>
-      ["dsa", "submissions", problemId] as const,
-    testCases: (problemId: number) =>
-      ["dsa", "testcases", problemId] as const,
+    submissions: (problemId: number) => ["dsa", "submissions", problemId] as const,
+    importStatus: () => ["dsa", "import-status"] as const,
     activity: (year: number) => ["dsa", "activity", year] as const,
     similar: (id: number) => ["dsa", "similar", id] as const,
-    approaches: (slug: string) => ["dsa", "approaches", slug] as const,
   },
+
   // Roadmaps
   roadmaps: {
     all: ["roadmaps"] as const,
@@ -222,36 +235,8 @@ export const queryKeys = {
       ["roadmaps", "list", params] as const,
     detail: (slug: string) => ["roadmaps", "detail", slug] as const,
     enrollments: () => ["roadmaps", "enrollments"] as const,
-    enrollmentDetail: (id: number) =>
-      ["roadmaps", "enrollment-detail", id] as const,
-    enrollmentAnalytics: (id: number) =>
-      ["roadmaps", "enrollment-analytics", id] as const,
-    topic: (slug: string, topicSlug: string) =>
-      ["roadmaps", "topic", slug, topicSlug] as const,
-    community: () => ["roadmaps", "community"] as const,
-    studyBuddy: (roadmapId: number) =>
-      ["roadmaps", "study-buddy", roadmapId] as const,
-  },
-  // Notes
-  notes: {
-    list: (filters?: Record<string, string | undefined>) => ["notes", "list", filters] as const,
-    detail: (contentType: string, contentId: string | number) => ["notes", "detail", contentType, contentId] as const,
-  },
-
-  // Peer Mock Interview
-  peerMockInterview: {
-    preferences: () => ["peer-mock-interview", "preferences"] as const,
-    upcoming: () => ["peer-mock-interview", "upcoming"] as const,
-    matches: () => ["peer-mock-interview", "matches"] as const,
-    history: (userId?: number) => ["peer-mock-interview", "history", userId] as const,
-  },
-
-  // Expert Mock Interview Sessions
-  expertSession: {
-    availableSlots: () => ["expert-session", "available-slots"] as const,
-    status: (id: number) => ["expert-session", "status", id] as const,
-    mySessions: () => ["expert-session", "my-sessions"] as const,
-    adminAvailabilityBlocks: () => ["admin", "expert-session", "availability-blocks"] as const,
-    adminBookings: () => ["admin", "expert-session", "bookings"] as const,
+    enrollmentDetail: (id: number) => ["roadmaps", "enrollment-detail", id] as const,
+    enrollmentAnalytics: (id: number) => ["roadmaps", "enrollment-analytics", id] as const,
+    topic: (slug: string, topicSlug: string) => ["roadmaps", "topic", slug, topicSlug] as const,
   },
 };

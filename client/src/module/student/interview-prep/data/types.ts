@@ -20,8 +20,6 @@ export interface InterviewQuestion {
   orderIndex: number;
   title: string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
-  companies?: string[];
-  frequency?: number;
   type: "Theory" | "Coding" | "Situational" | "Concept" | "Experience";
   concepts: string[];
   content: {

@@ -2,31 +2,24 @@
 
 **Prepare. Practice. Placed.**
 
-## Table of Contents 📑
-
-- [About InternHack](#about-internhack)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Project Structure](#project-structure)
-- [API Overview](#api-overview)
-- [Production Build](#production-build)
-- [Contributing](#contributing)
-- [Contributors](#contributors)
-- [Project Support](#project-support)
-- [License](#license)
-
 ## About InternHack
 - AI-powered career and hiring platform
 - Helps students prepare for placements and internships
 - Provides resume scoring and job matching tools
 - Offers mock interview practice and learning resources
 - Supports job discovery and application tracking
-- Includes dedicated dashboards for students and admins
-- Built to make placement preparation more accessible, efficient, and data-driven
+- Enables recruiters to manage job postings and candidates
+- Streamlines hiring workflows and interview processes
+- Includes dedicated dashboards for students, recruiters, and admins
+- Built to make hiring more accessible, efficient, and data-driven
 
 Live at **[internhack.xyz](https://www.internhack.xyz)**
+
+---
+
+## AI Assistant Context Files
+
+This repository includes AI assistant context files (`CLAUDE.md` and `.claude/`) for Claude Code users. These files provide project-specific context and code generation instructions for AI-assisted development and are **optional for contributors not using Claude Code**.
 
 ---
 
@@ -41,7 +34,6 @@ Live at **[internhack.xyz](https://www.internhack.xyz)**
 | **Authentication** | JWT Authentication, Google OAuth |
 | **Payments** | Dodo Payments |
 | **Cloud Storage** | AWS S3 with Local Storage Fallback |
-| **Caching & Rate Limiting** | In-process in-memory stores |
 | **Email Services** | Resend |
 | **Development Tools** | ESLint, Prettier, Nodemon, tsx |
 
@@ -51,7 +43,7 @@ Live at **[internhack.xyz](https://www.internhack.xyz)**
 
 ### Features for Students
 
-- **Job Board** — Browse curated and admin-posted jobs with advanced search, filters, tags, and one-click applications.
+- **Job Board** — Browse recruiter-posted jobs with advanced search, filters, tags, and one-click applications.
 - **External Job Listings** — Access curated opportunities aggregated from external platforms and updated regularly.
 - **AI Job Agent** — AI-powered assistant that recommends jobs based on user profiles, skills, and interests.
 - **ATS Resume Scorer** — Upload resumes and job descriptions to receive AI-generated compatibility scores and keyword gap analysis.
@@ -65,10 +57,20 @@ Live at **[internhack.xyz](https://www.internhack.xyz)**
 - **Application Tracker** — Monitor application progress from submission to interview rounds and final offers.
 - **Open Source Guide** — Step-by-step guidance for understanding codebases and contributing to open-source projects.
 
+### Features for Recruiters
+
+- **Recruiter Dashboard** — Centralized overview of job postings, applications, and hiring pipelines.
+- **Job Management** — Create and manage job postings with custom fields, interview workflows, and automated assessments.
+- **Multi-Round Hiring Workflow** — Conduct coding, DSA, HR, and system design interview rounds with structured evaluations.
+- **Application Review System** — Filter applicants, track candidate progress, and manage round-wise selection or rejection processes.
+- **ATS Resume Analysis** — Access AI-generated ATS scores and resume evaluations for better candidate screening.
+- **Talent Pool Management** — Save, organize, and manage promising candidates for future opportunities.
+- **Campus Recruitment Drives** — Plan and manage campus hiring campaigns efficiently.
+
 ### Features for Admins
 
 - **Admin Dashboard** — Monitor real-time platform statistics, user activity, and system performance.
-- **User & Job Management** — Manage users, job postings, companies, and platform reviews.
+- **User & Job Management** — Manage users, recruiters, job postings, companies, and platform reviews.
 - **External Job Management** — Create, manage, and moderate curated external job listings.
 - **AI Provider Management** — Configure and switch between multiple AI providers such as Gemini, Groq, and Claude.
 - **Content Management System** — Manage DSA problems, aptitude questions, skill assessments, hackathons, blogs, and learning resources.
@@ -92,14 +94,48 @@ git clone https://github.com/Sachinchaurasiya360/InternHack.git
 cd InternHack
 ```
 
+### Docker Compose (alternative)
+
+Requires [Docker Desktop](https://docs.docker.com/get-docker/) or Docker Engine plus Compose v2. You do **not** need a host-installed PostgreSQL or Node for this path. (**Redis is not used** by InternHack.) The API service image is defined in [`server/Dockerfile.dev`](server/Dockerfile.dev) for local dev only; production deploy continues to use [`server/dockerfile`](server/dockerfile).
+
+From the repo root:
+
+```bash
+cp .env.example .env
+# Set JWT_SECRET at minimum; add OAuth/AI keys as needed (see Environment Variables below).
+
+docker compose up --build
+```
+
+Compose falls back to the same Postgres defaults as `.env.example` when variables are absent, but the API refuses to boot without **`JWT_SECRET`**, which your root `.env` must supply.
+
+- Frontend **http://localhost:5173** — API **http://localhost:3000**
+- Source trees are bind-mounted into the containers; `CHOKIDAR_USEPOLLING` helps file watching on Docker Desktop for macOS.
+- On startup, the API container runs `prisma migrate deploy`, then `npm run dev`.
+- The frontend service runs **Vite in dev mode** (`npm run dev`) for hot reload; production client builds (`cd client && npm run build`) are still separate from this Compose file.
+
+Optional sample data:
+
+```bash
+docker compose exec server npm run seed
+```
+
+Uncomment the `postgres` `ports` section in `docker-compose.yml` if you need to reach Postgres from tools on your host defaulting to localhost.
+
+To install Node and Postgres on your machine instead, follow the numbered steps below.
+
 ### 2. Set up environment variables
 
 ```bash
+# Without Docker — per-package env files
 cp server/.env.example server/.env
 cp client/.env.example client/.env
+
+# Docker Compose — single consolidated file at the repo root
+cp .env.example .env
 ```
 
-Fill values as described below. You need a running PostgreSQL instance reachable via `DATABASE_URL`.
+Fill values as described below (Compose uses `.env`; per-package copies use `server/.env` and `client/.env`).
 
 ### 3. Install dependencies
 
@@ -154,7 +190,9 @@ Open **http://localhost:5173** and you're in!
 
 ## Environment Variables
 
-### Server (`server/.env`)
+For Docker Compose, use the **repo root [`.env.example`](.env.example)** as the master template (`cp .env.example .env`).
+
+### Server (`server/.env` or root `.env` with Compose)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -194,7 +232,8 @@ Open **http://localhost:5173** and you're in!
 
 ```
 InternHack/
-├── .env.example              # Combined env documentation
+├── docker-compose.yml        # Postgres + API + client (dev, hot reload)
+├── .env.example              # Compose + combined env documentation
 ├── client/                   # React frontend (Vite)
 │   ├── src/
 │   │   ├── components/       # Shared UI components
@@ -202,6 +241,7 @@ InternHack/
 │   │   └── module/           # Feature modules
 │   │       ├── auth/         # Login, register, OAuth
 │   │       ├── student/      # Student dashboard, jobs, applications, learning
+│   │       ├── recruiter/    # Recruiter dashboard, job management
 │   │       └── admin/        # Admin panel, moderation
 │   └── public/               # Static assets
 │
@@ -210,6 +250,8 @@ InternHack/
 │   │   ├── module/           # Feature modules (routes → controller → service)
 │   │   │   ├── auth/         # Authentication
 │   │   │   ├── student/      # Student APIs
+│   │   │   ├── job/          # Job CRUD
+│   │   │   ├── recruiter/    # Recruiter APIs
 │   │   │   ├── admin/        # Admin APIs
 │   │   │   ├── ats/          # ATS resume scoring
 │   │   │   ├── job-agent/    # AI chat agent
@@ -223,6 +265,9 @@ InternHack/
 │   │   └── index.ts          # Express app entry point
 │   └── package.json
 │
+└── .claude/                  # AI assistant context
+    ├── CLAUDE.md             # Project instructions
+    └── REPO_MAP.md           # Detailed module map
 ```
 
 > 📊 **Database Schema:** For a visual overview of all models and their relationships, see [docs/database-schema.md](./docs/database-schema.md).
@@ -248,6 +293,7 @@ module/
 | `/api/auth` | Login, Register, Google OAuth, OTP | Public |
 | `/api/jobs` | Job browsing and search | Public |
 | `/api/student` | Applications, profile, external job apply | Student |
+| `/api/recruiter` | Job management, hiring rounds, candidates | Recruiter |
 | `/api/admin` | Platform management, moderation | Admin |
 | `/api/ats` | ATS resume scoring | Student |
 | `/api/job-agent` | AI chat for job discovery | Student |

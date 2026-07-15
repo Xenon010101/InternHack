@@ -35,11 +35,10 @@ export class HnHiringSource extends BaseSignalSource {
   private readonly itemUrl = "https://hacker-news.firebaseio.com/v0/item";
   private readonly maxCommentsPerThread = 60;
 
-  async fetch(signal?: AbortSignal): Promise<SourceResult> {
+  async fetch(): Promise<SourceResult> {
     try {
       const threadRes = await fetch(this.algoliaUrl, {
         headers: { "User-Agent": "InternHack-Signals/1.0" },
-        signal,
       });
       if (!threadRes.ok) {
         return {
@@ -57,11 +56,11 @@ export class HnHiringSource extends BaseSignalSource {
       for (const thread of threads) {
         const threadId = Number(thread.objectID);
         if (!Number.isFinite(threadId)) continue;
-        const threadItem = await this.fetchItem(threadId, signal);
+        const threadItem = await this.fetchItem(threadId);
         if (!threadItem?.kids?.length) continue;
 
         const commentIds = threadItem.kids.slice(0, this.maxCommentsPerThread);
-        const comments = await Promise.all(commentIds.map((id) => this.fetchItem(id, signal)));
+        const comments = await Promise.all(commentIds.map((id) => this.fetchItem(id)));
 
         for (const comment of comments) {
           if (!comment?.text) continue;
@@ -76,9 +75,9 @@ export class HnHiringSource extends BaseSignalSource {
     }
   }
 
-  private async fetchItem(id: number, signal?: AbortSignal): Promise<HnItem | null> {
+  private async fetchItem(id: number): Promise<HnItem | null> {
     try {
-      const res = await fetch(`${this.itemUrl}/${String(id)}.json`, { signal });
+      const res = await fetch(`${this.itemUrl}/${String(id)}.json`);
       if (!res.ok) return null;
       return (await res.json()) as HnItem;
     } catch {

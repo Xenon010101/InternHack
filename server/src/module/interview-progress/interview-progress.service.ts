@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../database/db.js";
 
 type ProgressAction =
@@ -7,40 +8,61 @@ type ProgressAction =
   | "unbookmark"
   | "visit";
 
-async function aggregateProgress(userId: number) {
-  const [states, progress] = await Promise.all([
-    prisma.userInterviewQuestionState.findMany({
-      where: { userId },
-      select: { questionId: true, isCompleted: true, isBookmarked: true },
-    }),
-    prisma.userInterviewProgress.findUnique({
-      where: { userId },
-      select: { lastVisitedId: true, lastVisitedAt: true },
-    }),
-  ]);
-
-  return {
-    completedIds: states.filter((s) => s.isCompleted).map((s) => s.questionId),
-    bookmarkedIds: states.filter((s) => s.isBookmarked).map((s) => s.questionId),
-    lastVisitedId: progress?.lastVisitedId ?? null,
-    lastVisitedAt: progress?.lastVisitedAt ?? null,
-  };
-}
-
-const EMPTY_PROGRESS = {
-  completedIds: [] as string[],
-  bookmarkedIds: [] as string[],
-  lastVisitedId: null as string | null,
-  lastVisitedAt: null as Date | null,
-};
-
 export class InterviewProgressService {
+  private serializeProgress(progress: {
+    completedIds: string[];
+    bookmarkedIds: string[];
+    lastVisitedId: string | null;
+    lastVisitedAt: Date | null;
+  }) {
+    return {
+      completedIds: progress.completedIds,
+      bookmarkedIds: progress.bookmarkedIds,
+      lastVisitedId: progress.lastVisitedId,
+      lastVisitedAt: progress.lastVisitedAt,
+    };
+  }
+
+  private async runSerializable<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>
+  ): Promise<T> {
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await prisma.$transaction(operation, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        const canRetry =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2034" &&
+          attempt < maxAttempts;
+
+        if (!canRetry) throw error;
+      }
+    }
+
+    throw new Error("Could not save interview progress");
+  }
+
   async getProgress(userId: number) {
-    const result = await aggregateProgress(userId);
-    return result.completedIds.length === 0 && result.bookmarkedIds.length === 0 &&
-      result.lastVisitedId === null
-      ? EMPTY_PROGRESS
-      : result;
+    const progress = await prisma.userInterviewProgress.findUnique({
+      where: {
+        userId,
+      },
+    });
+
+    if (!progress) {
+      return {
+        completedIds: [],
+        bookmarkedIds: [],
+        lastVisitedId: null,
+        lastVisitedAt: null,
+      };
+    }
+
+    return this.serializeProgress(progress);
   }
 
   async updateProgress(
@@ -48,30 +70,55 @@ export class InterviewProgressService {
     questionId: string,
     action: ProgressAction
   ) {
-    if (action === "complete" || action === "uncomplete") {
-      await prisma.userInterviewQuestionState.upsert({
-        where: { userId_questionId: { userId, questionId } },
-        update: { isCompleted: action === "complete" },
-        create: { userId, questionId, isCompleted: action === "complete" },
-      });
-    }
-
-    if (action === "bookmark" || action === "unbookmark") {
-      await prisma.userInterviewQuestionState.upsert({
-        where: { userId_questionId: { userId, questionId } },
-        update: { isBookmarked: action === "bookmark" },
-        create: { userId, questionId, isBookmarked: action === "bookmark" },
-      });
-    }
-
-    if (action === "visit") {
-      await prisma.userInterviewProgress.upsert({
+    const progress = await this.runSerializable(async (tx) => {
+      const existing = await tx.userInterviewProgress.findUnique({
         where: { userId },
-        update: { lastVisitedId: questionId, lastVisitedAt: new Date() },
-        create: { userId, lastVisitedId: questionId, lastVisitedAt: new Date() },
       });
-    }
 
-    return aggregateProgress(userId);
+      let completedIds = [...(existing?.completedIds ?? [])];
+      let bookmarkedIds = [...(existing?.bookmarkedIds ?? [])];
+      let lastVisitedId = existing?.lastVisitedId ?? null;
+      let lastVisitedAt = existing?.lastVisitedAt ?? null;
+
+      if (action === "complete") {
+        completedIds = [...new Set([...completedIds, questionId])];
+      }
+
+      if (action === "uncomplete") {
+        completedIds = completedIds.filter((id) => id !== questionId);
+      }
+
+      if (action === "bookmark") {
+        bookmarkedIds = [...new Set([...bookmarkedIds, questionId])];
+      }
+
+      if (action === "unbookmark") {
+        bookmarkedIds = bookmarkedIds.filter((id) => id !== questionId);
+      }
+
+      if (action === "visit") {
+        lastVisitedId = questionId;
+        lastVisitedAt = new Date();
+      }
+
+      return tx.userInterviewProgress.upsert({
+        where: { userId },
+        create: {
+          userId,
+          completedIds,
+          bookmarkedIds,
+          lastVisitedId,
+          lastVisitedAt,
+        },
+        update: {
+          completedIds,
+          bookmarkedIds,
+          lastVisitedId,
+          lastVisitedAt,
+        },
+      });
+    });
+
+    return this.serializeProgress(progress);
   }
 }

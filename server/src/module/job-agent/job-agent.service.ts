@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "../../database/db.js";
 import { jobIndexService } from "../job-index/job-index.service.js";
 import { sendEmail } from "../../utils/email.utils.js";
-import { buildUnsubscribeUrl } from "../../utils/unsubscribe.utils.js";
 import { jobAgentJobsEmailHtml, jobAgentJobsEmailText } from "../../utils/email-templates.js";
 
 const genAI = new GoogleGenerativeAI(process.env["GEMINI_API_KEY"]!);
@@ -36,6 +35,7 @@ CURRENT USER PROFILE:
 - Graduating: ${user?.graduationYear || "Not set"}
 - Skills: ${user?.skills?.join(", ") || "None listed"}
 - Location: ${user?.location || "Not set"}
+- Job Status: ${user?.jobStatus || "Not set"}
 - Bio: ${user?.bio || "Not set"}
 
 CURRENT PREFERENCES:
@@ -241,7 +241,7 @@ export class JobAgentService {
       where: { id: userId },
       select: {
         name: true, skills: true, college: true,
-        graduationYear: true, bio: true, location: true,
+        graduationYear: true, bio: true, location: true, jobStatus: true,
       },
     });
     const pref = await prisma.userJobPreference.findUnique({ where: { userId } });
@@ -308,7 +308,7 @@ export class JobAgentService {
       where: { id: userId },
       select: {
         name: true, skills: true, college: true,
-        graduationYear: true, bio: true, location: true,
+        graduationYear: true, bio: true, location: true, jobStatus: true,
       },
     });
     const pref = await prisma.userJobPreference.findUnique({ where: { userId } });
@@ -543,7 +543,6 @@ export class JobAgentService {
         subject,
         html: jobAgentJobsEmailHtml(emailArgs),
         text: jobAgentJobsEmailText(emailArgs),
-        unsubscribeUrl: buildUnsubscribeUrl(userId),
       });
     } catch (err) {
       console.error("[JobAgent] Failed to send jobs email:", err);

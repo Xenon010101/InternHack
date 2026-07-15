@@ -22,6 +22,7 @@ import {
   User,
   GraduationCap,
   FolderGit2,
+  Trophy,
   AlignLeft,
   AlertCircle,
   Loader2,
@@ -174,6 +175,10 @@ const [toneManuallySelected, setToneManuallySelected] = useState(false);
     if (user.projects && user.projects.length > 0)
       parts.push(
         `${String(user.projects.length)} project${user.projects.length > 1 ? "s" : ""}`,
+      );
+    if (user.achievements && user.achievements.length > 0)
+      parts.push(
+        `${String(user.achievements.length)} achievement${user.achievements.length > 1 ? "s" : ""}`,
       );
     return parts;
   }, [user]);
@@ -813,6 +818,14 @@ useEffect(() => {
                             </p>
                           </div>
                         )}
+                        {user?.achievements && user.achievements.length > 0 && (
+                          <div className="flex items-start gap-2">
+                            <Trophy className="w-3 h-3 text-stone-500 mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-stone-600 dark:text-stone-400">
+                              {user.achievements.map((a) => a.title).join(", ")}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       <Link
                         to="/student/profile"
@@ -1088,9 +1101,16 @@ useEffect(() => {
                       setIsModified(updatedValue !== originalCoverLetter);
                     }}
                   />
-                  <p className="mt-2 text-[10px] font-mono uppercase tracking-widest text-stone-500 tabular-nums">
-  {wordCount} words · {charCount} characters
-</p>
+                  <div className="mt-3 pt-3 border-t border-stone-100 dark:border-white/5 flex items-center justify-between gap-4">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 tabular-nums">
+                      {wordCount} words · {charCount} chars
+                    </span>
+                    {isModified && (
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                        unsaved edits
+                      </span>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )

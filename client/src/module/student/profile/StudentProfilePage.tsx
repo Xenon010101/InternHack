@@ -4,16 +4,17 @@ import { queryKeys } from "../../../lib/query-keys";
 import { motion } from "framer-motion";
 import { Save, Loader2, Github } from "lucide-react";
 import { ProfilePageHeader } from "./components/ProfilePageHeader";
-import type { VerifiedSkill, ProjectItem, SkillTest } from "../../../lib/types";
+import type { VerifiedSkill, ProjectItem, AchievementItem } from "../../../lib/types";
 import api from "../../../lib/axios";
 import { uploadDirectToS3 } from "../../../utils/upload";
 import { useAuthStore } from "../../../lib/auth.store";
 import { SEO } from "../../../components/SEO";
 import { LoadingScreen } from "../../../components/LoadingScreen";
-import { Button } from "../../../components/ui/button";
 import toast from "@/components/ui/toast";
 import ImageCropModal from "../../../components/ImageCropModal";
 import GitHubImportModal from "./GitHubImportModal";
+import GitHubStatsCard from "./GitHubStatsCard";
+import { BadgesSection } from "../badges/BadgesSection";
 import ContributionGraphs from "../../../components/ContributionGraphs";
 import { SectionHeader } from "./components/SectionHeader";
 import { IdentityCard } from "./components/IdentityCard";
@@ -21,11 +22,12 @@ import { ProfileStrengthCard } from "./components/ProfileStrengthCard";
 import { BasicInfoSection } from "./components/BasicInfoSection";
 import { EducationSection } from "./components/EducationSection";
 import { SkillsSection } from "./components/SkillsSection";
+import { JobPreferencesSection } from "./components/JobPreferencesSection";
 import { ProjectsSection } from "./components/ProjectsSection";
+import { AchievementsSection } from "./components/AchievementsSection";
 import { SocialLinksSection } from "./components/SocialLinksSection";
 import { ResumesSection } from "./components/ResumesSection";
 import { cardCls } from "./components/styles";
-import { markLearningPathMilestone } from "../opensource/learning-paths.data";
 
 interface ProfileData {
   name: string;
@@ -45,57 +47,19 @@ interface ProfileData {
   githubUrl: string;
   portfolioUrl: string;
   leetcodeUrl: string;
+  jobStatus: string | null;
+  isProfilePublic: boolean;
   projects: ProjectItem[];
+  achievements: AchievementItem[];
 }
 
-type ProfileUserPayload = Partial<ProfileData> & { createdAt?: string | null };
-
-function toProfileData(u: ProfileUserPayload): ProfileData {
-  return {
-    name: u.name ?? "",
-    email: u.email ?? "",
-    contactNo: u.contactNo ?? "",
-    company: u.company ?? "",
-    designation: u.designation ?? "",
-    resumes: u.resumes ?? [],
-    profilePic: u.profilePic ?? "",
-    coverImage: u.coverImage ?? "",
-    bio: u.bio ?? "",
-    college: u.college ?? "",
-    graduationYear: u.graduationYear ?? null,
-    skills: u.skills ?? [],
-    location: u.location ?? "",
-    linkedinUrl: u.linkedinUrl ?? "",
-    githubUrl: u.githubUrl ?? "",
-    portfolioUrl: u.portfolioUrl ?? "",
-    leetcodeUrl: u.leetcodeUrl ?? "",
-    projects: u.projects ?? [],
-  };
-}
-
-// Display labels for skillName slugs from GET /skill-tests (same source the
-// skill-verification page uses). Falls back to a hyphen-to-space title-case
-// for any future skill test added before this map is updated.
-const SKILL_DISPLAY_NAMES: Record<string, string> = {
-  javascript: "JavaScript", python: "Python", react: "React", nodejs: "Node.js",
-  sql: "SQL", java: "Java", typescript: "TypeScript", "html-css": "HTML/CSS",
-  git: "Git", "data-structures": "Data Structures", express: "Express.js",
-  mongodb: "MongoDB", docker: "Docker", redis: "Redis", websocket: "WebSocket",
-  graphql: "GraphQL", nextjs: "Next.js", aws: "AWS", "rest-api": "REST API",
-  linux: "Linux", cpp: "C++", go: "Go", rust: "Rust", kubernetes: "Kubernetes",
-  "system-design": "System Design", cybersecurity: "Cybersecurity",
-  "machine-learning": "Machine Learning", devops: "DevOps",
-  tailwindcss: "Tailwind CSS", vue: "Vue.js", angular: "Angular",
-  csharp: "C#", django: "Django", flutter: "Flutter", kotlin: "Kotlin",
-  "spring-boot": "Spring Boot", swift: "Swift", terraform: "Terraform",
-};
-
-function skillDisplayName(skillName: string): string {
-  return SKILL_DISPLAY_NAMES[skillName] ?? skillName
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
+const VERIFIABLE_SKILLS = [
+  "JavaScript", "Python", "React", "Node.js", "SQL", "Java", "TypeScript",
+  "HTML/CSS", "Git", "Data Structures", "Express.js", "MongoDB", "Docker",
+  "Redis", "WebSocket", "GraphQL", "Next.js", "AWS", "REST API", "Linux",
+  "C++", "Go", "Rust", "Kubernetes", "System Design", "Cybersecurity",
+  "Machine Learning", "DevOps", "Tailwind CSS", "Vue.js",
+];
 
 interface CollegeSuggestion {
   name: string;
@@ -121,7 +85,7 @@ export default function StudentProfilePage() {
     resumes: [], profilePic: "", coverImage: "", bio: "", college: "",
     graduationYear: null, skills: [], location: "",
     linkedinUrl: "", githubUrl: "", portfolioUrl: "", leetcodeUrl: "",
-    projects: [],
+    jobStatus: null, isProfilePublic: false, projects: [], achievements: [],
   });
   const [memberSince, setMemberSince] = useState<string | null>(null);
   const [skillInput, setSkillInput] = useState("");
@@ -132,15 +96,24 @@ export default function StudentProfilePage() {
   const [deletingResume, setDeletingResume] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    basic: true, education: true, skills: true, projects: true, links: true, resumes: true,
+    basic: true, education: true, skills: true, jobPrefs: false, projects: true, achievements: true, links: false, resumes: true,
   });
+  const [jobPrefRoles, setJobPrefRoles] = useState("");
+  const [jobPrefSkills, setJobPrefSkills] = useState("");
+  const [jobPrefLocations, setJobPrefLocations] = useState("");
+  const [jobPrefSalary, setJobPrefSalary] = useState("");
+  const [jobPrefWorkMode, setJobPrefWorkMode] = useState<string[]>([]);
+  const [jobPrefExpLevel, setJobPrefExpLevel] = useState<string[]>([]);
+  const [jobPrefDomains, setJobPrefDomains] = useState<string[]>([]);
+  const [savingJobPrefs, setSavingJobPrefs] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropType, setCropType] = useState<"profile" | "cover" | null>(null);
   const [showGitHubImport, setShowGitHubImport] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [profileUrlCopied, setProfileUrlCopied] = useState(false);
 
   const queryClient = useQueryClient();
   const formInitialized = useRef(false);
+  const jobPrefsInitialized = useRef(false);
 
   const [collegeSuggestions, setCollegeSuggestions] = useState<CollegeSuggestion[]>([]);
   const [collegeLoading, setCollegeLoading] = useState(false);
@@ -152,15 +125,16 @@ export default function StudentProfilePage() {
   const collegeDropdownRef = useRef<HTMLDivElement>(null);
   const skillInputRef = useRef<HTMLInputElement>(null);
   const skillDropdownRef = useRef<HTMLDivElement>(null);
-  const isPremium = user?.subscriptionStatus === "ACTIVE" && user.subscriptionPlan !== "FREE";
+
+  const filteredSkillSuggestions = skillInput.trim().length > 0
+    ? VERIFIABLE_SKILLS.filter((s) => {
+        const q = skillInput.trim().toLowerCase();
+        const alreadyAdded = form.skills.some((fs) => fs.toLowerCase() === s.toLowerCase());
+        return !alreadyAdded && s.toLowerCase().includes(q);
+      })
+    : [];
 
   // ── React Query: profile, verified skills, job prefs ─────────────────
-  useEffect(() => {
-    if (form.githubUrl.trim()) {
-      markLearningPathMilestone("github-oauth");
-    }
-  }, [form.githubUrl]);
-
   const { data: profileUser, isLoading } = useQuery({
     queryKey: queryKeys.profile.me(),
     queryFn: () => api.get("/auth/me").then((r) => r.data.user),
@@ -173,31 +147,45 @@ export default function StudentProfilePage() {
     staleTime: 60 * 60 * 1000,
   });
 
-  // Same source (and query key) as /student/skill-verification, so the
-  // suggestion dropdown always matches the skills that are actually verifiable.
-  const { data: skillTests } = useQuery({
-    queryKey: queryKeys.skillTests.list(),
-    queryFn: () => api.get("/skill-tests").then((r) => r.data.tests as SkillTest[]),
-    staleTime: 60 * 60 * 1000,
+  const { data: jobPrefsData } = useQuery({
+    queryKey: queryKeys.jobFeed.preferences(),
+    queryFn: () => api.get("/job-feed/preferences").then((r) => r.data),
+    staleTime: 30 * 60 * 1000,
   });
-
-  const verifiableSkillNames = (skillTests ?? []).map((t) => skillDisplayName(t.skillName));
-
-  const filteredSkillSuggestions = skillInput.trim().length > 0
-    ? verifiableSkillNames.filter((s) => {
-        const q = skillInput.trim().toLowerCase();
-        const alreadyAdded = form.skills.some((fs) => fs.toLowerCase() === s.toLowerCase());
-        return !alreadyAdded && s.toLowerCase().includes(q);
-      })
-    : [];
 
   // Initialise form once when profile data first arrives
   useEffect(() => {
     if (!profileUser || formInitialized.current) return;
     formInitialized.current = true;
-    setForm(toProfileData(profileUser));
-    setMemberSince(profileUser.createdAt ?? null);
+    const u = profileUser;
+    setForm({
+      name: u.name ?? "", email: u.email ?? "", contactNo: u.contactNo ?? "",
+      company: u.company ?? "", designation: u.designation ?? "",
+      resumes: u.resumes ?? [], profilePic: u.profilePic ?? "",
+      coverImage: u.coverImage ?? "", bio: u.bio ?? "", college: u.college ?? "",
+      graduationYear: u.graduationYear ?? null, skills: u.skills ?? [],
+      location: u.location ?? "", linkedinUrl: u.linkedinUrl ?? "",
+      githubUrl: u.githubUrl ?? "", portfolioUrl: u.portfolioUrl ?? "",
+      leetcodeUrl: u.leetcodeUrl ?? "",
+      jobStatus: u.jobStatus ?? null, isProfilePublic: u.isProfilePublic ?? false,
+      projects: u.projects ?? [], achievements: u.achievements ?? [],
+    });
+    setMemberSince(u.createdAt ?? null);
   }, [profileUser]);
+
+  // Initialise job prefs form once when data first arrives
+  useEffect(() => {
+    if (!jobPrefsData || jobPrefsInitialized.current) return;
+    jobPrefsInitialized.current = true;
+    const p = jobPrefsData;
+    setJobPrefRoles(p.desiredRoles?.join(", ") || "");
+    setJobPrefSkills(p.desiredSkills?.join(", ") || "");
+    setJobPrefLocations(p.desiredLocations?.join(", ") || "");
+    setJobPrefSalary(p.minSalary ? String(p.minSalary / 100000) : "");
+    setJobPrefWorkMode(p.workMode || []);
+    setJobPrefExpLevel(p.experienceLevel || []);
+    setJobPrefDomains(p.domains || []);
+  }, [jobPrefsData]);
 
   const verifiedSkills: VerifiedSkill[] = verifiedData?.verified ?? [];
   const verifiedMap = new Map(verifiedSkills.map((v: VerifiedSkill) => [v.skillName.toLowerCase(), v]));
@@ -267,7 +255,9 @@ export default function StudentProfilePage() {
       location: updated.location, linkedinUrl: updated.linkedinUrl,
       githubUrl: updated.githubUrl, portfolioUrl: updated.portfolioUrl,
       leetcodeUrl: updated.leetcodeUrl,
-      projects: updated.projects,
+      jobStatus: updated.jobStatus as "NO_OFFER" | "LOOKING" | "OPEN_TO_OFFER" | null,
+      isProfilePublic: updated.isProfilePublic,
+      projects: updated.projects, achievements: updated.achievements,
     });
   };
 
@@ -285,17 +275,17 @@ export default function StudentProfilePage() {
     setForm((prev) => ({ ...prev, skills: prev.skills.filter((_, i) => i !== index) }));
   };
 
-  const handleSave = async (): Promise<boolean> => {
+  const handleSave = async () => {
     if (!form.name.trim() || form.name.trim().length < 2) {
-      toast.error("Name must be at least 2 characters"); return false;
+      toast.error("Name must be at least 2 characters"); return;
     }
     if (form.contactNo && form.contactNo.trim()) {
-      const normalizedPhone = form.contactNo.replace(/[\s-]/g, "");
+      const normalizedPhone = form.contactNo.replace(/[\s\-]/g, "");
       if (!/^\+\d{11,13}$/.test(normalizedPhone)) {
         toast.error("Phone must include country code (e.g. +91 9876543210)");
         setFieldErrors((prev) => ({ ...prev, contactNo: ["Phone must include country code (e.g. +91 9876543210)"] }));
         setOpenSections((prev) => ({ ...prev, basic: true }));
-        return false;
+        return;
       }
     }
     setFieldErrors({});
@@ -309,7 +299,8 @@ export default function StudentProfilePage() {
         location: form.location.trim(), linkedinUrl: form.linkedinUrl.trim(),
         githubUrl: form.githubUrl.trim(), portfolioUrl: form.portfolioUrl.trim(),
         leetcodeUrl: form.leetcodeUrl.trim(),
-        projects: form.projects,
+        jobStatus: form.jobStatus || null, isProfilePublic: form.isProfilePublic,
+        projects: form.projects, achievements: form.achievements,
       });
       const u = res.data.user;
       const updated: ProfileData = {
@@ -320,25 +311,24 @@ export default function StudentProfilePage() {
         location: u.location ?? "", linkedinUrl: u.linkedinUrl ?? "",
         githubUrl: u.githubUrl ?? "", portfolioUrl: u.portfolioUrl ?? "",
         leetcodeUrl: u.leetcodeUrl ?? "",
-        projects: u.projects ?? [],
+        jobStatus: u.jobStatus ?? null, isProfilePublic: u.isProfilePublic ?? false,
+        projects: u.projects ?? [], achievements: u.achievements ?? [],
       };
       setForm(updated);
       syncUser(updated);
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile.me() });
       toast.success("Profile updated!");
-      setIsEditing(false);
-      return true;
     } catch (err: unknown) {
       const errData = (err as { response?: { data?: { errors?: { fieldErrors?: Record<string, string[]> } } } })?.response?.data;
       if (errData?.errors?.fieldErrors) {
         const fe = errData.errors.fieldErrors;
         setFieldErrors(fe);
         const sectionMap: Record<string, string> = {
-          name: "basic", contactNo: "basic", bio: "basic", location: "basic",
+          name: "basic", contactNo: "basic", bio: "basic", location: "basic", jobStatus: "basic",
           college: "education", graduationYear: "education", company: "education", designation: "education",
           skills: "skills",
           linkedinUrl: "links", githubUrl: "links", portfolioUrl: "links",
-          projects: "projects",
+          projects: "projects", achievements: "achievements",
         };
         setOpenSections((prev) => {
           const next = { ...prev };
@@ -353,19 +343,9 @@ export default function StudentProfilePage() {
       } else {
         toast.error("Failed to update profile");
       }
-      return false;
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCancelEdit = () => {
-    if (profileUser) setForm(toProfileData(profileUser));
-    setFieldErrors({});
-    setSkillInput("");
-    setShowSkillSuggestions(false);
-    setShowCollegeSuggestions(false);
-    setIsEditing(false);
   };
 
   const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
@@ -454,11 +434,24 @@ export default function StudentProfilePage() {
     }
   };
 
+  const handleCopyProfileUrl = async () => {
+    const url = `${window.location.origin}/student/profile/public/${user?.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setProfileUrlCopied(true);
+      toast.success("Profile URL copied!");
+      setTimeout(() => setProfileUrlCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy URL");
+    }
+  };
+
   const toggleSection = (key: string) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const displayDate = memberSince || user?.createdAt;
+  const isPremium = user?.subscriptionStatus === "ACTIVE" && user.subscriptionPlan !== "FREE";
 
   const profileCompletion = (() => {
     const fields = [form.name, form.bio, form.contactNo, form.location, form.college, form.company, form.linkedinUrl, form.githubUrl];
@@ -474,14 +467,7 @@ export default function StudentProfilePage() {
     <div className="relative pb-16">
       <SEO title="My Profile" description="Update your InternHack student profile details." noIndex />
 
-      <ProfilePageHeader
-        profileCompletion={profileCompletion}
-        saving={saving}
-        isEditing={isEditing}
-        onEdit={() => setIsEditing(true)}
-        onCancel={handleCancelEdit}
-        onSave={handleSave}
-      />
+      <ProfilePageHeader profileCompletion={profileCompletion} saving={saving} onSave={handleSave} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Identity sidebar */}
@@ -499,11 +485,15 @@ export default function StudentProfilePage() {
               linkedinUrl={form.linkedinUrl}
               githubUrl={form.githubUrl}
               portfolioUrl={form.portfolioUrl}
+              isProfilePublic={form.isProfilePublic}
               uploadingPic={uploadingPic}
               uploadingCover={uploadingCover}
-              isEditing={isEditing}
+              profileUrlCopied={profileUrlCopied}
+              userId={user?.id}
               onProfilePicSelect={handleProfilePicSelect}
               onCoverImageSelect={handleCoverImageSelect}
+              onTogglePublic={() => setForm((prev) => ({ ...prev, isProfilePublic: !prev.isProfilePublic }))}
+              onCopyProfileUrl={handleCopyProfileUrl}
             />
           </motion.div>
 
@@ -514,6 +504,16 @@ export default function StudentProfilePage() {
               displayDate={displayDate}
               isPremium={isPremium}
             />
+          </motion.div>
+
+          {user?.id && (
+            <motion.div custom={2} variants={fadeInUp} initial="hidden" animate="visible">
+              <BadgesSection studentId={user.id} />
+            </motion.div>
+          )}
+
+          <motion.div custom={3} variants={fadeInUp} initial="hidden" animate="visible">
+            <GitHubStatsCard githubUrl={form.githubUrl} />
           </motion.div>
         </aside>
 
@@ -534,8 +534,8 @@ export default function StudentProfilePage() {
                 bio={form.bio}
                 contactNo={form.contactNo}
                 location={form.location}
+                jobStatus={form.jobStatus}
                 fieldErrors={fieldErrors}
-                isEditing={isEditing}
                 onChange={(field, value) => handleChange(field as keyof ProfileData, value)}
               />
             )}
@@ -561,7 +561,6 @@ export default function StudentProfilePage() {
                 showCollegeSuggestions={showCollegeSuggestions}
                 collegeInputRef={collegeInputRef}
                 collegeDropdownRef={collegeDropdownRef}
-                isEditing={isEditing}
                 onCollegeChange={(value) => { handleChange("college", value); searchColleges(value); }}
                 onCollegeFocus={() => { if (collegeSuggestions.length > 0) setShowCollegeSuggestions(true); }}
                 onSelectCollege={(name) => { handleChange("college", name); setShowCollegeSuggestions(false); setCollegeSuggestions([]); }}
@@ -588,7 +587,6 @@ export default function StudentProfilePage() {
                 verifiedMap={verifiedMap}
                 skillInputRef={skillInputRef}
                 skillDropdownRef={skillDropdownRef}
-                isEditing={isEditing}
                 onSkillInputChange={(value) => { setSkillInput(value); setShowSkillSuggestions(value.trim().length > 0); }}
                 onSkillInputFocus={() => { if (skillInput.trim().length > 0) setShowSkillSuggestions(true); }}
                 onAddSkill={handleAddSkill}
@@ -597,32 +595,58 @@ export default function StudentProfilePage() {
             )}
           </motion.div>
 
-          {/* Projects */}
+          {/* Job Preferences */}
           <motion.div custom={3} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
             <SectionHeader
               kicker="section / 04"
+              title="Job preferences"
+              meta="ai matching"
+              open={openSections.jobPrefs}
+              onToggle={() => toggleSection("jobPrefs")}
+            />
+            {openSections.jobPrefs && (
+              <JobPreferencesSection
+                jobPrefRoles={jobPrefRoles}
+                jobPrefSkills={jobPrefSkills}
+                jobPrefLocations={jobPrefLocations}
+                jobPrefSalary={jobPrefSalary}
+                jobPrefWorkMode={jobPrefWorkMode}
+                jobPrefExpLevel={jobPrefExpLevel}
+                jobPrefDomains={jobPrefDomains}
+                savingJobPrefs={savingJobPrefs}
+                onRolesChange={setJobPrefRoles}
+                onSkillsChange={setJobPrefSkills}
+                onLocationsChange={setJobPrefLocations}
+                onSalaryChange={setJobPrefSalary}
+                onWorkModeChange={setJobPrefWorkMode}
+                onExpLevelChange={setJobPrefExpLevel}
+                onDomainsChange={setJobPrefDomains}
+                onSavingChange={setSavingJobPrefs}
+              />
+            )}
+          </motion.div>
+
+          {/* Projects */}
+          <motion.div custom={4} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
+            <SectionHeader
+              kicker="section / 05"
               title="Featured Projects"
               meta={`${form.projects.length}/4`}
               open={openSections.projects}
               onToggle={() => toggleSection("projects")}
               right={
-                isEditing ? (
-                  <Button
-                    type="button"
-                    onClick={() => setShowGitHubImport(true)}
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 font-mono uppercase tracking-widest text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50"
-                  >
-                    <Github className="w-3.5 h-3.5" /> import
-                  </Button>
-                ) : null
+                <button
+                  type="button"
+                  onClick={() => setShowGitHubImport(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-stone-300 dark:border-white/10 rounded-md text-xs font-mono uppercase tracking-widest text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50 hover:border-stone-400 dark:hover:border-white/30 transition-colors bg-transparent cursor-pointer"
+                >
+                  <Github className="w-3.5 h-3.5" /> import
+                </button>
               }
             />
             {openSections.projects && (
               <ProjectsSection
                 projects={form.projects}
-                isEditing={isEditing}
                 onChange={(projects) => {
                   setForm((prev) => ({ ...prev, projects }));
                   if (fieldErrors.projects) setFieldErrors((prev) => { const next = { ...prev }; delete next.projects; return next; });
@@ -632,10 +656,31 @@ export default function StudentProfilePage() {
             )}
           </motion.div>
 
-          {/* Social links */}
-          <motion.div custom={4} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
+          {/* Achievements */}
+          <motion.div custom={5} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
             <SectionHeader
-              kicker="section / 05"
+              kicker="section / 06"
+              title="Achievements & leadership"
+              meta={`${form.achievements.length}/10`}
+              open={openSections.achievements}
+              onToggle={() => toggleSection("achievements")}
+            />
+            {openSections.achievements && (
+              <AchievementsSection
+                achievements={form.achievements}
+                onChange={(achievements) => {
+                  setForm((prev) => ({ ...prev, achievements }));
+                  if (fieldErrors.achievements) setFieldErrors((prev) => { const next = { ...prev }; delete next.achievements; return next; });
+                }}
+                errors={fieldErrors.achievements}
+              />
+            )}
+          </motion.div>
+
+          {/* Social links */}
+          <motion.div custom={6} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
+            <SectionHeader
+              kicker="section / 07"
               title="Social links"
               meta={
                 [form.linkedinUrl, form.githubUrl, form.portfolioUrl, form.leetcodeUrl].filter(Boolean).length > 0
@@ -652,16 +697,15 @@ export default function StudentProfilePage() {
                 portfolioUrl={form.portfolioUrl}
                 leetcodeUrl={form.leetcodeUrl}
                 fieldErrors={fieldErrors}
-                isEditing={isEditing}
                 onChange={(field, value) => handleChange(field as keyof ProfileData, value)}
               />
             )}
           </motion.div>
 
           {/* Resumes */}
-          <motion.div custom={5} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
+          <motion.div custom={7} variants={fadeInUp} initial="hidden" animate="visible" className={cardCls}>
             <SectionHeader
-              kicker="section / 06"
+              kicker="section / 08"
               title="Resumes"
               meta={`${form.resumes.length}/${MAX_RESUMES}`}
               open={openSections.resumes}
@@ -672,7 +716,6 @@ export default function StudentProfilePage() {
                 resumes={form.resumes}
                 uploadingResume={uploadingResume}
                 deletingResume={deletingResume}
-                isEditing={isEditing}
                 onUpload={handleResumeUpload}
                 onDelete={handleResumeDelete}
               />
@@ -682,26 +725,23 @@ export default function StudentProfilePage() {
           {/* Coding activity */}
           <motion.div custom={9} variants={fadeInUp} initial="hidden" animate="visible">
             <ContributionGraphs
-              githubUsername={form.githubUrl ? form.githubUrl.split("/").filter(Boolean).pop() : undefined}
-              leetcodeUsername={form.leetcodeUrl ? form.leetcodeUrl.split("/").filter(Boolean).pop() : undefined}
+              githubUsername={form.githubUrl ? form.githubUrl.split("github.com/").pop()?.replace(/\/$/, "") : undefined}
+              leetcodeUsername={form.leetcodeUrl ? form.leetcodeUrl.split("leetcode.com/").pop()?.replace(/^\/?u\//, "").replace(/\/$/, "") : undefined}
               showPrompts
             />
           </motion.div>
 
           {/* Save (bottom) */}
-          {isEditing && (
-            <motion.div custom={10} variants={fadeInUp} initial="hidden" animate="visible" className="pt-2">
-              <Button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                autoHeight
-                className="w-full gap-2 px-6 py-3.5 bg-lime-400 text-stone-950 text-sm font-bold hover:bg-lime-300"
-              >
-                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save all changes</>}
-              </Button>
-            </motion.div>
-          )}
+          <motion.div custom={10} variants={fadeInUp} initial="hidden" animate="visible" className="pt-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="group w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-lime-400 text-stone-950 rounded-md text-sm font-bold hover:bg-lime-300 transition-colors border-0 cursor-pointer disabled:opacity-50"
+            >
+              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save all changes</>}
+            </button>
+          </motion.div>
         </div>
       </div>
 

@@ -9,6 +9,7 @@ const QUICK_LINKS = [
   { to: "/learn/dsa", label: "DSA practice", hint: "problems" },
   { to: "/ats-score", label: "ATS score", hint: "ai grader" },
   { to: "/blog", label: "Blog", hint: "guides" },
+  { to: "/for-recruiters", label: "Recruiters", hint: "hiring" },
 ];
 
 export default function NotFoundPage() {

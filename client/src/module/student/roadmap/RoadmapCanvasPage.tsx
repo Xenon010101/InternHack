@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import ReactFlow, {
+  Background,
+  BackgroundVariant,
+  Controls,
+  MiniMap,
+  type Node,
+  type Edge,
+  Position,
+  Handle,
+  type NodeProps,
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import { motion, AnimatePresence } from "framer-motion";
 import NumberFlow from "@number-flow/react";
 import {
@@ -16,19 +31,18 @@ import {
   Flame,
   ChevronRight,
   BookOpen,
-  Pencil,
+  LayoutTemplate,
+  GitCommit,
+  Network,
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Wand2,
-  Link2,
+  Sparkles,
   TrendingUp,
   AlertTriangle,
-  Users,
-  GraduationCap,
 } from "lucide-react";
 import { SEO } from "../../../components/SEO";
-import  RoadmapCompletionModal from "./RoadmapCompletionModal";
+import { RoadmapCompletionModal } from "./RoadmapCompletionModal";
 import { Button } from "../../../components/ui/button";
 import { Navbar } from "../../../components/Navbar";
 import { useStudentSidebar } from "../../../components/StudentSidebar";
@@ -42,7 +56,6 @@ import type {
   RoadmapTopic,
   RoadmapTopicStatus,
   RoadmapResource,
-  StudyBuddyResponse,
 } from "../../../lib/types";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { queryKeys } from "../../../lib/query-keys";
@@ -57,50 +70,49 @@ interface AnalyticsResponse {
   analytics: RoadmapEnrollmentAnalytics;
 }
 
-interface SectionHeaderProps {
+interface TopicNodeData {
+  topic: RoadmapTopic;
+  status: RoadmapTopicStatus;
+  bookmarked: boolean;
+  isNext: boolean;
+  isWeak: boolean;
+  index: number;
+  onClick: () => void;
+}
+
+interface SectionLabelData {
   title: string;
   index: number;
   total: number;
   completed: number;
-  isCollapsed: boolean;
-  onToggle: () => void;
+  isCollapsed?: boolean;
+  onToggle?: () => void;
   /** Present only on AI-generated roadmaps owned by the current user */
   onRegenerate?: () => void;
   isRegenerating?: boolean;
   aiRegeneratedAt?: string | null;
 }
 
-// ─── Section banner: header for a group of topics ─────────────────────────
-function SectionHeader({
-  title,
-  index,
-  total,
-  completed,
-  isCollapsed,
-  onToggle,
-  onRegenerate,
-  isRegenerating,
-  aiRegeneratedAt,
-}: SectionHeaderProps) {
-  const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
-  const sectionDone = completed === total && total > 0;
-  const baseDelay = Math.min(index * 0.06, 0.3);
+// ─── Custom node: section banner (decorative, no handles) ─────────────────
+function SectionLabelNode({ data }: NodeProps<SectionLabelData>) {
+  const pct =
+    data.total === 0 ? 0 : Math.round((data.completed / data.total) * 100);
+  const sectionDone = data.completed === data.total && data.total > 0;
+  const baseDelay = Math.min(data.index * 0.08, 0.4);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: baseDelay, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="select-none"
+      className="select-none w-120"
     >
       {/* Decorative spine break */}
-      {index > 0 && (
-        <div className="flex items-center gap-2 mb-5 px-2">
-          <span className="h-1 w-1 rounded-full bg-stone-400 dark:bg-stone-600" />
-          <div className="h-px flex-1 border-t border-dashed border-stone-300 dark:border-stone-700" />
-          <span className="h-1 w-1 rounded-full bg-stone-400 dark:bg-stone-600" />
-        </div>
-      )}
+      <div className="flex items-center gap-2 mb-5 px-2">
+        <span className="h-1 w-1 rounded-full bg-stone-400 dark:bg-stone-600" />
+        <div className="h-px flex-1 border-t border-dashed border-stone-300 dark:border-stone-700" />
+        <span className="h-1 w-1 rounded-full bg-stone-400 dark:bg-stone-600" />
+      </div>
 
       <div className="flex items-center gap-4 px-2">
         {/* Number/check token with ping ring on completion */}
@@ -113,16 +125,17 @@ function SectionHeader({
             stiffness: 380,
             damping: 20,
           }}
-          className={`relative h-11 w-11 rounded-md flex items-center justify-center shrink-0 ${sectionDone
+          className={`relative h-11 w-11 rounded-md flex items-center justify-center shrink-0 ${
+            sectionDone
               ? "bg-lime-400 text-stone-950"
               : "bg-stone-950 dark:bg-stone-50 text-stone-50 dark:text-stone-950"
-            }`}
+          }`}
         >
           {sectionDone ? (
             <Check className="w-5 h-5" strokeWidth={3} />
           ) : (
             <span className="text-sm font-mono font-bold tabular-nums">
-              {String(index + 1).padStart(2, "0")}
+              {String(data.index + 1).padStart(2, "0")}
             </span>
           )}
           {sectionDone && (
@@ -137,39 +150,41 @@ function SectionHeader({
 
         <div className="flex-1 min-w-0">
           <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-stone-400 mb-0.5">
-            section {String(index + 1).padStart(2, "0")}
+            section {String(data.index + 1).padStart(2, "0")}
           </p>
           <p className="text-lg font-bold text-stone-950 dark:text-stone-50 leading-tight truncate">
-            {title}
+            {data.title}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onToggle}
-          title={isCollapsed ? "Expand section" : "Collapse section"}
-          className="p-1 rounded hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-500 transition-colors mr-1 cursor-pointer"
-        >
-          {isCollapsed ? (
-            <ChevronDown className="w-5 h-5" />
-          ) : (
-            <ChevronUp className="w-5 h-5" />
-          )}
-        </button>
-
-        {onRegenerate && (
+        {data.onToggle && (
           <button
             type="button"
-            onClick={onRegenerate}
-            disabled={isRegenerating}
+            onClick={data.onToggle}
+            title={data.isCollapsed ? "Expand section" : "Collapse section"}
+            className="p-1 rounded hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-500 transition-colors pointer-events-auto mr-1 cursor-pointer"
+          >
+            {data.isCollapsed ? (
+              <ChevronDown className="w-5 h-5" />
+            ) : (
+              <ChevronUp className="w-5 h-5" />
+            )}
+          </button>
+        )}
+
+        {data.onRegenerate && (
+          <button
+            type="button"
+            onClick={data.onRegenerate}
+            disabled={data.isRegenerating}
             title={
-              isRegenerating
+              data.isRegenerating
                 ? "Regenerating section…"
                 : "Regenerate this section with AI"
             }
-            className="p-1 rounded hover:bg-lime-100 dark:hover:bg-lime-950/40 text-stone-400 hover:text-lime-600 dark:hover:text-lime-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mr-2 cursor-pointer"
+            className="p-1 rounded hover:bg-lime-100 dark:hover:bg-lime-950/40 text-stone-400 hover:text-lime-600 dark:hover:text-lime-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors pointer-events-auto mr-2 cursor-pointer"
           >
-            {isRegenerating ? (
+            {data.isRegenerating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <RefreshCw className="w-4 h-4" />
@@ -205,14 +220,14 @@ function SectionHeader({
       {/* Topic count + status */}
       <div className="mt-2 mx-2 flex items-center justify-between text-[10px] font-mono text-stone-400">
         <span className="tabular-nums">
-          {completed}/{total} topics
+          {data.completed}/{data.total} topics
         </span>
         {sectionDone ? (
           <span className="inline-flex items-center gap-1 text-lime-600 dark:text-lime-500 font-bold uppercase tracking-wider">
             <Check className="w-2.5 h-2.5" strokeWidth={3} />
             section complete
           </span>
-        ) : completed > 0 ? (
+        ) : data.completed > 0 ? (
           <span className="text-stone-500 dark:text-stone-400 uppercase tracking-wider">
             in progress
           </span>
@@ -224,9 +239,9 @@ function SectionHeader({
       </div>
 
       {/* AI-regenerated badge */}
-      {aiRegeneratedAt && (
+      {data.aiRegeneratedAt && (
         <div className="mt-1.5 mx-2 flex items-center gap-1 text-[9px] font-mono text-lime-600 dark:text-lime-500 uppercase tracking-wider">
-          <Wand2 className="w-2.5 h-2.5" />
+          <Sparkles className="w-2.5 h-2.5" />
           ai-rewritten
         </div>
       )}
@@ -234,31 +249,20 @@ function SectionHeader({
   );
 }
 
-interface TopicTimelineCardProps {
-  topic: RoadmapTopic;
-  status: RoadmapTopicStatus;
-  bookmarked: boolean;
-  isNext: boolean;
-  isWeak: boolean;
-  index: number;
-  prerequisiteTitles: string[];
-  onClick: () => void;
-}
-
-// ─── Topic card: one row in the timeline ───────────────────────────────────
-function TopicTimelineCard({
-  topic,
-  status,
-  isNext,
-  bookmarked,
-  index,
-  isWeak,
-  prerequisiteTitles,
-  onClick,
-}: TopicTimelineCardProps) {
+// ─── Custom node: topic card ────────────────────────────────────────────────
+function TopicNode({ data }: NodeProps<TopicNodeData>) {
+  const { status, topic, isNext, bookmarked, index, isWeak } = data;
   const isCompleted = status === "COMPLETED";
   const isInProgress = status === "IN_PROGRESS";
   const isSkipped = status === "SKIPPED";
+
+  const railColor = isCompleted
+    ? "bg-lime-500"
+    : isInProgress
+      ? "bg-amber-400"
+      : isSkipped
+        ? "bg-stone-400 dark:bg-stone-600"
+        : "bg-stone-200 dark:bg-stone-800";
 
   const weakRing =
     isWeak && !isCompleted ? "ring-2 ring-amber-400 ring-offset-1" : "";
@@ -269,17 +273,38 @@ function TopicTimelineCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
-        delay: Math.min(index * 0.02, 0.5),
-        duration: 0.35,
+        delay: Math.min(index * 0.022, 0.6),
+        duration: 0.4,
         ease: [0.22, 1, 0.36, 1],
       }}
-      whileHover={{ scale: 1.01, transition: { duration: 0.15 } }}
-      onClick={onClick}
-      className={`group relative bg-white dark:bg-stone-900 border ${cardBorder} rounded-lg cursor-pointer min-h-16 overflow-hidden transition-all hover:shadow-lg hover:shadow-lime-500/5 dark:hover:shadow-lime-400/10 ${weakRing}`}
+      whileHover={{ scale: 1.02, transition: { duration: 0.15 } }}
+      whileTap={{ scale: 0.98 }}
+      onClick={data.onClick}
+      className={`group relative bg-white dark:bg-stone-900 border-y border-r ${cardBorder} border-l-0 rounded-r-md cursor-pointer active:cursor-grabbing w-72 min-h-16 overflow-hidden transition-all hover:shadow-lg hover:shadow-lime-500/5 dark:hover:shadow-lime-400/10 ${weakRing}`}
     >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="bg-stone-300! dark:bg-stone-700! w-2! h-2! border-0! top-0!"
+      />
+
+      {/* Left status rail */}
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-1.5 ${railColor} transition-colors`}
+      >
+        {isNext && (
+          <motion.div
+            initial={{ y: "-100%" }}
+            animate={{ y: "200%" }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-x-0 h-1/2 bg-linear-to-b from-transparent via-lime-300 to-transparent"
+          />
+        )}
+      </div>
+
       {/* Bookmark corner ribbon */}
       {bookmarked && (
         <div className="pointer-events-none absolute top-0 right-0">
@@ -291,7 +316,7 @@ function TopicTimelineCard({
       )}
 
       {/* Card body */}
-      <div className="pl-4 pr-3.5 py-3">
+      <div className="pl-5 pr-3.5 py-3">
         {/* Top row: step + status */}
         <div className="flex items-center justify-between mb-1.5 min-h-3.5">
           <div className="inline-flex items-center gap-1.5 text-[9.5px] font-mono uppercase tracking-[0.18em] text-stone-400">
@@ -346,10 +371,11 @@ function TopicTimelineCard({
 
         {/* Title */}
         <p
-          className={`text-sm font-bold leading-snug transition-colors ${isCompleted || isSkipped
+          className={`text-sm font-bold leading-snug line-clamp-2 transition-colors ${
+            isCompleted || isSkipped
               ? "text-stone-400 dark:text-stone-600 line-through decoration-1 decoration-stone-300 dark:decoration-stone-700"
               : "text-stone-950 dark:text-stone-50 group-hover:text-stone-950 dark:group-hover:text-stone-50"
-            }`}
+          }`}
         >
           {topic.title}
         </p>
@@ -380,34 +406,18 @@ function TopicTimelineCard({
             <ChevronRight className="w-3 h-3" />
           </span>
         </div>
-
-        {/* Prerequisite badges */}
-        {prerequisiteTitles.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-dashed border-stone-200 dark:border-stone-800 flex items-start gap-1.5 text-[10px] font-mono text-stone-400">
-            <Link2 className="w-2.5 h-2.5 mt-0.5 shrink-0" />
-            <span className="leading-relaxed">
-              requires{" "}
-              <span className="text-stone-600 dark:text-stone-300 font-semibold">
-                {prerequisiteTitles.join(", ")}
-              </span>
-            </span>
-          </div>
-        )}
       </div>
+
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="bg-stone-300! dark:bg-stone-700! w-2! h-2! border-0! bottom-0!"
+      />
     </motion.div>
   );
 }
 
-function topicDotClass(
-  status: RoadmapTopicStatus,
-  isNext: boolean,
-): string {
-  if (status === "COMPLETED") return "bg-lime-500";
-  if (status === "IN_PROGRESS") return "bg-amber-400";
-  if (status === "SKIPPED") return "bg-stone-400 dark:bg-stone-600";
-  if (isNext) return "bg-lime-400";
-  return "bg-stone-300 dark:bg-stone-700";
-}
+const nodeTypes = { topic: TopicNode, sectionLabel: SectionLabelNode };
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 export default function RoadmapCanvasPage() {
@@ -416,6 +426,11 @@ export default function RoadmapCanvasPage() {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false,
   );
+  const [isTouchDevice, setIsTouchDevice] = useState(() =>
+    typeof window !== "undefined"
+      ? "ontouchstart" in window || navigator.maxTouchPoints > 0
+      : false,
+  );
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -423,10 +438,24 @@ export default function RoadmapCanvasPage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  }, []);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const graphOffsetsRef = useRef(new Map<number, { x: number; y: number }>());
   const [drawerTopicId, setDrawerTopicId] = useState<number | null>(null);
   const [downloading, setDownloading] = useState<"light" | "dark" | null>(null);
+  const [viewMode, setViewMode] = useState<"LINEAR" | "GRID" | "GRAPH">(
+    "LINEAR",
+  );
+
+  // On small screens (< 768px), default to a linear list view.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isMobile && viewMode !== "LINEAR") setViewMode("LINEAR");
+  }, [isMobile, viewMode]);
   // Track which sectionId is currently being regenerated
   const [regeneratingSectionId, setRegeneratingSectionId] = useState<
     number | null
@@ -457,9 +486,7 @@ export default function RoadmapCanvasPage() {
         );
         setWeakTopicTitles(slugs);
       })
-      .catch((err) => {
-        console.error("Failed to fetch recommendations:", err);
-      });
+      .catch(() => {});
   }, []);
 
   const toggleSection = useCallback((id: number) => {
@@ -471,14 +498,6 @@ export default function RoadmapCanvasPage() {
     });
   }, []);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-   const [showEditModal, setShowEditModal] = useState(false);
-  const [showBuddyDrawer, setShowBuddyDrawer] = useState(false);
-  const [preferSameCollege, setPreferSameCollege] = useState(false);
-  const [title, setTitle] = useState("");
-  const [shortDescription, setShortDescription] = useState("");
-  const [level, setLevel] = useState<"BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "ALL_LEVELS">(
-    "BEGINNER",
-  );
   // Track previous percentComplete so we only fire the modal on the transition to 100
   const prevPercentRef = useRef<number | null>(null);
   const hasShownCompletionRef = useRef(false);
@@ -539,66 +558,6 @@ export default function RoadmapCanvasPage() {
     enabled: !!enrollmentId,
   });
 
-  const { data: profileData } = useQuery({
-    queryKey: queryKeys.profile.me(),
-    queryFn: () => api.get<{ user: { college: string | null } }>("/auth/me").then((r) => r.data),
-  });
-  const hasCollege = Boolean(profileData?.user?.college);
-
-  const roadmapId = data?.enrollment?.roadmapId;
-
-  const { data: studyBuddyData } = useQuery({
-    queryKey: queryKeys.roadmaps.studyBuddy(roadmapId!),
-    queryFn: () =>
-      api
-        .get<StudyBuddyResponse>(`/roadmaps/${roadmapId}/study-buddy`)
-        .then((res) => res.data),
-    enabled: !!roadmapId,
-  });
-
-  const optInMutation = useMutation({
-    mutationFn: (body: { preferSameCollege: boolean }) =>
-      api.post(`/roadmaps/${roadmapId}/study-buddy/opt-in`, body).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.roadmaps.studyBuddy(roadmapId!) });
-      toast.success("Joined matching pool!");
-    },
-    onError: () => {
-      toast.error("Failed to opt in");
-    },
-  });
-
-  const optOutMutation = useMutation({
-    mutationFn: () =>
-      api.delete(`/roadmaps/${roadmapId}/study-buddy/opt-in`).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.roadmaps.studyBuddy(roadmapId!) });
-      toast.success("Left study buddy matching.");
-    },
-    onError: () => {
-      toast.error("Failed to opt out");
-    },
-  });
-
-  const rematchMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/roadmaps/${roadmapId}/study-buddy/rematch`).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.roadmaps.studyBuddy(roadmapId!) });
-      toast.success("Rematch request processed!");
-    },
-    onError: () => {
-      toast.error("Failed to request rematch");
-    },
-  });
-
-  useEffect(() => {
-    if (studyBuddyData) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPreferSameCollege(studyBuddyData.preferSameCollege);
-    }
-  }, [studyBuddyData]);
-
   const loading = enrollmentsLoading || detailLoading;
   const error = enrollmentsError || detailError;
 
@@ -620,13 +579,6 @@ export default function RoadmapCanvasPage() {
     }
 
     prevPercentRef.current = pct;
-  }, [data]);
-  useEffect(() => {
-    if (!data) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTitle(data.enrollment.roadmap.title);
-    setShortDescription(data.enrollment.roadmap.shortDescription);
-    setLevel(data.enrollment.roadmap.level);
   }, [data]);
 
   const progressByTopicId = useMemo(() => {
@@ -658,25 +610,6 @@ export default function RoadmapCanvasPage() {
   const handleNodeClick = useCallback((topicId: number) => {
     setDrawerTopicId(topicId);
   }, []);
-  const handleUpdateRoadmap = async () => {
-  try {
-    await api.patch(`/roadmaps/${slug}`, {
-      title,
-      shortDescription,
-      level,
-    });
-
-    toast.success("Roadmap updated");
-
-    setShowEditModal(false);
-
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.roadmaps.enrollmentDetail(enrollmentId!),
-    });
-  } catch {
-    toast.error("Failed to update roadmap");
-  }
-};
 
   const allTopics = useMemo(() => {
     if (!data) return [];
@@ -700,6 +633,12 @@ export default function RoadmapCanvasPage() {
     return { totalAffected: completed + inProgress, completed, inProgress };
   }, [regenModal, data, progressByTopicId]);
 
+  const [nodes, setNodes, onNodesChange] = useNodesState<
+    TopicNodeData | SectionLabelData
+  >([]);
+
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
   const isAiOwned = !!(
     data?.enrollment.roadmap.isAiGenerated &&
     data?.enrollment.roadmap.ownerUserId
@@ -713,17 +652,191 @@ export default function RoadmapCanvasPage() {
     [],
   );
 
-  const topicsBySlug = useMemo(() => {
-    const map = new Map<string, RoadmapTopic>();
-    for (const t of allTopics) map.set(t.slug, t);
-    return map;
-  }, [allTopics]);
+  const getGraphOffset = useCallback((topicId: number) => {
+    const existing = graphOffsetsRef.current.get(topicId);
+    if (existing) return existing;
 
-  const globalIndexByTopicId = useMemo(() => {
-    const map = new Map<number, number>();
-    allTopics.forEach((t, i) => map.set(t.id, i));
-    return map;
-  }, [allTopics]);
+    const xSeed = (topicId * 37) % 100;
+    const ySeed = (topicId * 53) % 50;
+    const offset = {
+      x: xSeed - 50,
+      y: ySeed - 25,
+    };
+
+    graphOffsetsRef.current.set(topicId, offset);
+    return offset;
+  }, []);
+
+  useEffect(() => {
+    if (!data) return;
+
+    const slugToTopicId = new Map<string, number>();
+    for (const t of allTopics) slugToTopicId.set(t.slug, t.id);
+
+    const TOPIC_NODE_WIDTH = 288;
+    const TOPIC_X = -TOPIC_NODE_WIDTH / 2;
+    const SECTION_BANNER_X = -240;
+    const SECTION_HEADER_HEIGHT = 150;
+    const ROW_HEIGHT = 110;
+    const SECTION_GAP = 70;
+
+    const newNodes: Node<TopicNodeData | SectionLabelData>[] = [];
+    const newEdges: Edge[] = [];
+    const sections = data.enrollment.roadmap.sections;
+
+    let cursorY = 0;
+    let globalIdx = 0;
+    let prevSectionLastTopicId: number | null = null;
+
+    sections.forEach((section, sIdx) => {
+      const isCollapsed = collapsedSections.has(section.id);
+      const completedInSection = section.topics.filter(
+        (t) => progressByTopicId.get(t.id)?.status === "COMPLETED",
+      ).length;
+
+      newNodes.push({
+        id: `section-${section.id}`,
+        type: "sectionLabel",
+        position: { x: SECTION_BANNER_X, y: cursorY },
+        data: {
+          title: section.title,
+          index: sIdx,
+          total: section.topics.length,
+          completed: completedInSection,
+          isCollapsed,
+          onToggle: () => toggleSection(section.id),
+          ...(isAiOwned && {
+            onRegenerate: () => openRegenModal(section.id, section.title),
+            isRegenerating: regeneratingSectionId === section.id,
+            aiRegeneratedAt: section.aiRegeneratedAt ?? null,
+          }),
+        },
+        draggable: viewMode === "GRAPH",
+        selectable: viewMode === "GRAPH",
+      });
+      cursorY += SECTION_HEADER_HEIGHT;
+
+      const firstTopicInSection = section.topics[0];
+
+      if (prevSectionLastTopicId && firstTopicInSection && !isCollapsed) {
+        newEdges.push({
+          id: `bridge-${prevSectionLastTopicId}-${firstTopicInSection.id}`,
+          source: String(prevSectionLastTopicId),
+          target: String(firstTopicInSection.id),
+          type: "smoothstep",
+          style: {
+            stroke: "#a8a29e",
+            strokeWidth: 1.25,
+            strokeDasharray: "3 5",
+            opacity: 0.5,
+          },
+        });
+      }
+
+      if (!isCollapsed) {
+        section.topics.forEach((topic, tIdx) => {
+          const p = progressByTopicId.get(topic.id);
+          newNodes.push({
+            id: String(topic.id),
+            type: "topic",
+            position:
+              viewMode === "GRAPH"
+                ? {
+                    x: TOPIC_X + getGraphOffset(topic.id).x,
+                    y: cursorY + getGraphOffset(topic.id).y,
+                  }
+                : { x: TOPIC_X, y: cursorY },
+            data: {
+              topic,
+              status: p?.status ?? "NOT_STARTED",
+              bookmarked: p?.bookmarked ?? false,
+              isNext: topic.id === nextTopicId,
+              isWeak: weakTopicTitles.has(topic.slug),
+              index: globalIdx,
+              onClick: () => handleNodeClick(topic.id),
+            },
+            draggable: viewMode === "GRAPH",
+          });
+          globalIdx += 1;
+          cursorY += ROW_HEIGHT;
+
+          if (tIdx > 0) {
+            const prev = section.topics[tIdx - 1];
+            const prevDone =
+              progressByTopicId.get(prev.id)?.status === "COMPLETED";
+            const isFrontier = prevDone && topic.id === nextTopicId;
+            newEdges.push({
+              id: `e${prev.id}-${topic.id}`,
+              source: String(prev.id),
+              target: String(topic.id),
+              type: "smoothstep",
+              animated: isFrontier,
+              style: {
+                stroke: prevDone ? "#84cc16" : "#d6d3d1",
+                strokeWidth: prevDone ? 2 : 1.5,
+              },
+            });
+          }
+
+          for (const preSlug of topic.prerequisiteSlugs ?? []) {
+            const preId = slugToTopicId.get(preSlug);
+            if (preId && preId !== topic.id) {
+              newEdges.push({
+                id: `p${preId}-${topic.id}`,
+                source: String(preId),
+                target: String(topic.id),
+                type: "smoothstep",
+                animated: false,
+                style: {
+                  stroke: "#a8a29e",
+                  strokeWidth: 1.25,
+                  strokeDasharray: "4 4",
+                  opacity: 0.45,
+                },
+              });
+            }
+          }
+        });
+      }
+
+      prevSectionLastTopicId = !isCollapsed
+        ? (section.topics[section.topics.length - 1]?.id ??
+          prevSectionLastTopicId)
+        : prevSectionLastTopicId;
+      cursorY += SECTION_GAP;
+    });
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [
+    data,
+
+    allTopics,
+
+    progressByTopicId,
+
+    nextTopicId,
+
+    handleNodeClick,
+
+    viewMode,
+
+    collapsedSections,
+    toggleSection,
+
+    isAiOwned,
+
+    openRegenModal,
+
+    regeneratingSectionId,
+
+    getGraphOffset,
+
+    setNodes,
+
+    setEdges,
+    weakTopicTitles,
+  ]);
 
   const drawerTopic = useMemo(() => {
     if (!drawerTopicId || !data) return null;
@@ -760,27 +873,20 @@ export default function RoadmapCanvasPage() {
 
   const downloadPdf = async (theme: "light" | "dark") => {
     if (!enrollmentId) return;
-
     setDownloading(theme);
-
     try {
       const res = await api.get(
         `/roadmaps/me/enrollments/${enrollmentId}/pdf`,
         { responseType: "blob" },
       );
-
       const url = URL.createObjectURL(res.data as Blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = `${slug}-roadmap${theme === "dark" ? "-dark" : ""}.pdf`;
       a.click();
-
       URL.revokeObjectURL(url);
-
-      toast.success("PDF downloaded successfully");
     } catch {
-      toast.error("PDF generation failed. Please try again.");
+      toast.error("Could not download PDF");
     } finally {
       setDownloading(null);
     }
@@ -925,9 +1031,9 @@ export default function RoadmapCanvasPage() {
         >
           <div className="flex items-center gap-4 px-5 py-3">
             <Link
-              to="/roadmaps"
+              to="/student/roadmaps"
               className="p-2 -ml-2 text-stone-400 hover:text-stone-50 hover:bg-white/5 rounded-md transition-colors no-underline"
-              aria-label="Back to roadmaps"
+              aria-label="Back to dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
@@ -943,6 +1049,50 @@ export default function RoadmapCanvasPage() {
             </div>
 
             <div className="hidden md:flex items-center gap-5 shrink-0">
+              <div className="flex bg-stone-900/50 p-1 rounded-lg border border-stone-800">
+                <Button
+                  variant="ghost"
+                  mode="icon"
+                  size="sm"
+                  onClick={() => setViewMode("LINEAR")}
+                  title="Linear View"
+                  className={
+                    viewMode === "LINEAR"
+                      ? "bg-stone-800 text-stone-50"
+                      : "text-stone-400 hover:text-stone-200"
+                  }
+                >
+                  <GitCommit className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  mode="icon"
+                  size="sm"
+                  onClick={() => setViewMode("GRID")}
+                  title="Grid View"
+                  className={
+                    viewMode === "GRID"
+                      ? "bg-stone-800 text-stone-50"
+                      : "text-stone-400 hover:text-stone-200"
+                  }
+                >
+                  <LayoutTemplate className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  mode="icon"
+                  size="sm"
+                  onClick={() => setViewMode("GRAPH")}
+                  title="Graph View"
+                  className={
+                    viewMode === "GRAPH"
+                      ? "bg-stone-800 text-stone-50"
+                      : "text-stone-400 hover:text-stone-200"
+                  }
+                >
+                  <Network className="w-4 h-4" />
+                </Button>
+              </div>
               <Stat
                 icon={Target}
                 label="progress"
@@ -989,29 +1139,6 @@ export default function RoadmapCanvasPage() {
                 }
               />
             </div>
-                        <button
-              type="button"
-              onClick={() => setShowEditModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-stone-800 text-stone-50 text-xs font-bold rounded-md hover:bg-stone-700 transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
-            </button>
-
-            {studyBuddyData && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowBuddyDrawer(true)}
-              >
-                <Users className="w-3.5 h-3.5 text-lime-400" />
-                {studyBuddyData.status === "MATCHED"
-                  ? `Buddy: ${studyBuddyData.buddy?.name.split(" ")[0]}`
-                  : studyBuddyData.status === "SEARCHING"
-                    ? "Buddy: Searching..."
-                    : "Find Study Buddy"}
-              </Button>
-            )}
 
             <button
               type="button"
@@ -1019,13 +1146,12 @@ export default function RoadmapCanvasPage() {
               disabled={downloading !== null}
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-lime-400 text-stone-950 text-xs font-bold rounded-md hover:bg-lime-300 transition-colors disabled:opacity-60 cursor-pointer border-0"
             >
-              {downloading === "light" ? (
+              {downloading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-
-              {downloading === "light" ? "Generating..." : "PDF"}
+              PDF
             </button>
           </div>
 
@@ -1042,108 +1168,74 @@ export default function RoadmapCanvasPage() {
           </div>
         </motion.header>
 
-        {/* ─── Timeline ────────────────────────────────────────────────────── */}
-        <div className="flex-1 bg-stone-50 dark:bg-stone-950">
-          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-8">
-            {/* Legend */}
-            <div className="mb-6 flex items-center gap-4">
-              <LegendDot color="bg-lime-500" label="done" />
-              <LegendDot color="bg-amber-400" label="active" />
-              <LegendDot
-                color="border-2 border-stone-300 dark:border-stone-700"
-                label="todo"
+        {/* ─── Canvas ──────────────────────────────────────────────────────── */}
+        <div className="flex-1 relative">
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              panOnScroll={false}
+              zoomOnScroll={!isTouchDevice}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              nodeTypes={nodeTypes}
+              fitView={false}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              onInit={(instance) => {
+                const w = window.innerWidth;
+                // Center the spine (flow x = 0) on screen, pin to top of content
+                instance.setViewport({ x: w / 2, y: 30, zoom: 1 });
+              }}
+              proOptions={{ hideAttribution: true }}
+              nodesDraggable={true}
+              nodesConnectable={false}
+              elementsSelectable={true}
+              panOnDrag={true}
+              minZoom={0.4}
+              maxZoom={1.5}
+              className="bg-stone-50 dark:bg-stone-950"
+            >
+              <Background
+                variant={BackgroundVariant.Dots}
+                gap={28}
+                size={1}
+                color="#d6d3d1"
+                className="dark:opacity-20"
               />
-            </div>
+              <Controls
+                showInteractive={false}
+                className="bg-white! dark:bg-stone-900! border! border-stone-200! dark:border-stone-800! rounded-md! shadow-sm! [&_button]:border-stone-200! dark:[&_button]:border-stone-800! [&_button:hover]:bg-lime-50! dark:[&_button:hover]:bg-lime-950/30!"
+              />
+              <MiniMap
+                pannable
+                zoomable
+                maskColor="rgba(245, 245, 244, 0.6)"
+                className="bg-white! dark:bg-stone-900! border! border-stone-200! dark:border-stone-800! rounded-md!"
+                nodeColor={(n) => {
+                  if (n.type === "sectionLabel") return "transparent";
+                  const d = n.data as TopicNodeData;
+                  if (d?.status === "COMPLETED") return "#84cc16";
+                  if (d?.status === "IN_PROGRESS") return "#fbbf24";
+                  return "#d6d3d1";
+                }}
+              />
+            </ReactFlow>
+          </ReactFlowProvider>
 
-            {data.enrollment.roadmap.sections.map((section, sIdx) => {
-              const isCollapsed = collapsedSections.has(section.id);
-              const completedInSection = section.topics.filter(
-                (t) => progressByTopicId.get(t.id)?.status === "COMPLETED",
-              ).length;
-
-              return (
-                <div key={section.id} className={sIdx > 0 ? "mt-10" : ""}>
-                  <SectionHeader
-                    title={section.title}
-                    index={sIdx}
-                    total={section.topics.length}
-                    completed={completedInSection}
-                    isCollapsed={isCollapsed}
-                    onToggle={() => toggleSection(section.id)}
-                    {...(isAiOwned
-                      ? {
-                        onRegenerate: () =>
-                          openRegenModal(section.id, section.title),
-                        isRegenerating:
-                          regeneratingSectionId === section.id,
-                        aiRegeneratedAt: section.aiRegeneratedAt ?? null,
-                      }
-                      : {})}
-                  />
-
-                  {!isCollapsed && (
-                    <div className="mt-5 space-y-2">
-                      {section.topics.map((topic, tIdx) => {
-                        const p = progressByTopicId.get(topic.id);
-                        const status = p?.status ?? "NOT_STARTED";
-                        const isNext = topic.id === nextTopicId;
-                        const isFirst = tIdx === 0;
-                        const isLast = tIdx === section.topics.length - 1;
-                        const prevTopic =
-                          tIdx > 0 ? section.topics[tIdx - 1] : null;
-                        const prevDone = prevTopic
-                          ? progressByTopicId.get(prevTopic.id)?.status ===
-                          "COMPLETED"
-                          : false;
-                        const prerequisiteTitles = (
-                          topic.prerequisiteSlugs ?? []
-                        )
-                          .map((s) => topicsBySlug.get(s)?.title)
-                          .filter((t): t is string => Boolean(t));
-
-                        return (
-                          <div key={topic.id} className="relative flex gap-3">
-                            {/* Gutter: connecting line + status dot */}
-                            <div className="relative flex w-6 shrink-0 justify-center">
-                              {!isFirst && (
-                                <span
-                                  className={`absolute top-0 h-5 w-px ${prevDone
-                                      ? "bg-lime-400"
-                                      : "bg-stone-200 dark:bg-stone-800"
-                                    }`}
-                                />
-                              )}
-                              {!isLast && (
-                                <span className="absolute top-5 bottom-0 w-px bg-stone-200 dark:bg-stone-800" />
-                              )}
-                              <span
-                                className={`relative z-10 mt-4 h-2.5 w-2.5 rounded-full ${topicDotClass(status, isNext)}`}
-                              />
-                            </div>
-
-                            <div className="flex-1 min-w-0 pb-1">
-                              <TopicTimelineCard
-                                topic={topic}
-                                status={status}
-                                bookmarked={p?.bookmarked ?? false}
-                                isNext={isNext}
-                                isWeak={weakTopicTitles.has(topic.slug)}
-                                index={
-                                  globalIndexByTopicId.get(topic.id) ?? 0
-                                }
-                                prerequisiteTitles={prerequisiteTitles}
-                                onClick={() => handleNodeClick(topic.id)}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {/* Floating legend */}
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.4 }}
+            className="absolute bottom-5 left-5 hidden sm:flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-stone-900/90 backdrop-blur border border-stone-200 dark:border-stone-800 rounded-md shadow-sm"
+          >
+            <LegendDot color="bg-lime-500" label="done" />
+            <LegendDot color="bg-amber-400" label="active" />
+            <LegendDot
+              color="border-2 border-stone-300 dark:border-stone-700"
+              label="todo"
+            />
+          </motion.div>
         </div>
 
         {/* ─── Drawer ──────────────────────────────────────────────────────── */}
@@ -1177,7 +1269,6 @@ export default function RoadmapCanvasPage() {
                   <Button
                     variant="ghost"
                     mode="icon"
-                    aria-label="Close drawer"
                     size="sm"
                     onClick={() => setDrawerTopicId(null)}
                   >
@@ -1278,10 +1369,11 @@ export default function RoadmapCanvasPage() {
                           bookmarked: !drawerProgress?.bookmarked,
                         })
                       }
-                      className={`inline-flex items-center justify-center h-7 w-7 rounded-md text-xs font-bold transition-colors cursor-pointer border ${drawerProgress?.bookmarked
+                      className={`inline-flex items-center justify-center h-7 w-7 rounded-md text-xs font-bold transition-colors cursor-pointer border ${
+                        drawerProgress?.bookmarked
                           ? "bg-lime-400 text-stone-950 border-lime-400"
                           : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 dark:bg-stone-900 dark:text-stone-400 dark:border-stone-800 dark:hover:border-stone-600"
-                        }`}
+                      }`}
                     >
                       <Bookmark
                         className={`w-3 h-3 ${drawerProgress?.bookmarked ? "fill-current" : ""}`}
@@ -1386,394 +1478,10 @@ export default function RoadmapCanvasPage() {
           )}
         </AnimatePresence>
 
-        {/* ─── Study Buddy Drawer ────────────────────────────────────────── */}
-        <AnimatePresence>
-          {showBuddyDrawer && studyBuddyData && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => setShowBuddyDrawer(false)}
-                className="fixed inset-0 bg-stone-950/40 backdrop-blur-[2px] z-40"
-              />
-              <motion.div
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 280 }}
-                className={
-                  isMobile
-                    ? "fixed bottom-0 left-0 right-0 h-[78vh] bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 shadow-2xl z-50 overflow-y-auto rounded-t-2xl"
-                    : "fixed inset-y-0 right-0 w-full sm:w-115 bg-white dark:bg-stone-950 border-l border-stone-200 dark:border-stone-800 shadow-2xl z-50 overflow-y-auto"
-                }
-              >
-                <div className="sticky top-0 z-10 bg-white/90 dark:bg-stone-950/90 backdrop-blur border-b border-stone-200 dark:border-stone-800 px-5 py-3 flex items-center justify-between">
-                  <div className="inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-stone-400">
-                    <span className="h-1 w-1 bg-lime-500" />
-                    Study Buddy Matcher
-                  </div>
-                  <Button
-                    variant="ghost"
-                    mode="icon"
-                    aria-label="Close drawer"
-                    size="sm"
-                    onClick={() => setShowBuddyDrawer(false)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="p-5 space-y-6">
-                  {studyBuddyData.status === "NOT_OPTED_IN" && (
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <h3 className="font-display text-xl font-bold text-stone-950 dark:text-stone-50 leading-tight">
-                          Find an Accountability Partner
-                        </h3>
-                        <p className="text-sm text-stone-500 dark:text-stone-400">
-                          Get matched with another student enrolled in this roadmap. Compare progress, see who completes more topics each week, and stay motivated together.
-                        </p>
-                      </div>
-
-                      <div className="bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-4">
-                        <div className="flex items-start gap-3">
-                          <CheckCircle2 className="w-5 h-5 text-lime-500 shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                              Smart Matching Algorithm
-                            </h4>
-                            <p className="text-xs text-stone-500 dark:text-stone-400">
-                              Pairs you based on current completion rates, completed topics count, and experience level.
-                            </p>
-                          </div>
-                        </div>
-
-                        {hasCollege ? (
-                          <label className="flex items-start gap-3 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={preferSameCollege}
-                              onChange={(e) => setPreferSameCollege(e.target.checked)}
-                              className="mt-1 accent-lime-400 h-4 w-4 rounded border-stone-300 text-lime-600 focus:ring-lime-500"
-                            />
-                            <div>
-                              <span className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                                Match within your college
-                              </span>
-                              <p className="text-xs text-stone-500 dark:text-stone-400">
-                                Prioritize matching with peers from {profileData?.user?.college}.
-                              </p>
-                            </div>
-                          </label>
-                        ) : (
-                          <div className="flex items-start gap-2.5 text-xs text-stone-500 dark:text-stone-500">
-                            <GraduationCap className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>
-                              College match unavailable. Set your college in your profile to allow matching with campus peers.
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <Button
-                        variant="primary"
-                        className="w-full justify-center"
-                        disabled={optInMutation.isPending}
-                        onClick={() => optInMutation.mutate({ preferSameCollege })}
-                      >
-                        {optInMutation.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            Joining pool...
-                          </>
-                        ) : (
-                          "Find a Study Buddy"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-
-                  {studyBuddyData.status === "SEARCHING" && (
-                    <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
-                      <div className="relative flex items-center justify-center h-48 w-48">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-36 h-36 rounded-full border border-lime-400/20 animate-ping duration-1000" />
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-28 h-28 rounded-full border border-lime-400/30 animate-pulse duration-1000" />
-                        </div>
-                        <div className="relative z-10 p-5 bg-stone-100 dark:bg-stone-900 rounded-full border border-lime-400/50 shadow-lg shadow-lime-950/20">
-                          <Users className="w-10 h-10 text-lime-400" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <h3 className="font-display text-lg font-bold text-stone-950 dark:text-stone-50 leading-tight">
-                          Looking for your Buddy...
-                        </h3>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 max-w-xs">
-                          We are analyzing the roadmap pool to match you with someone at a similar pace and experience level.
-                        </p>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-stone-400 hover:text-stone-200"
-                        disabled={optOutMutation.isPending}
-                        onClick={() => optOutMutation.mutate()}
-                      >
-                        {optOutMutation.isPending ? "Canceling..." : "Cancel Search"}
-                      </Button>
-                    </div>
-                  )}
-
-                  {studyBuddyData.status === "MATCHED" && studyBuddyData.buddy && (
-                    <div className="space-y-6">
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-stone-400">
-                          Your Accountability Partner
-                        </h3>
-                        
-                        <div className="flex items-center gap-4 bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-800 rounded-xl p-4">
-                          <div className="flex items-center justify-center w-12 h-12 bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-lg font-bold rounded-lg shrink-0">
-                            {studyBuddyData.buddy.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="font-display font-bold text-stone-900 dark:text-stone-50 leading-tight">
-                              {studyBuddyData.buddy.name}
-                            </h4>
-                            <div className="flex flex-col gap-1">
-                              {studyBuddyData.buddy.college && (
-                                <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                                  <GraduationCap className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="truncate max-w-48">
-                                    {studyBuddyData.buddy.college}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-3 text-xs font-mono text-stone-500 dark:text-stone-400">
-                                <span>Exp: {studyBuddyData.buddy.experienceLevel}</span>
-                                {studyBuddyData.buddy.currentStreak > 0 && (
-                                  <span className="flex items-center gap-1 text-amber-500">
-                                    <Flame className="w-3.5 h-3.5" />
-                                    {studyBuddyData.buddy.currentStreak}d
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4 border-t border-stone-200 dark:border-stone-800 pt-5">
-                        <h4 className="text-xs font-mono uppercase tracking-wider text-stone-400">
-                          Progress Comparison
-                        </h4>
-
-                        <div className="space-y-4">
-                          {/* User progress */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs font-bold text-stone-800 dark:text-stone-200">
-                              <span>You</span>
-                              <span className="font-mono">{summary.percentComplete}%</span>
-                            </div>
-                            <div className="h-2 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-lime-400 rounded-full transition-all duration-500"
-                                style={{ width: `${summary.percentComplete}%` }}
-                              />
-                            </div>
-                            <div className="text-xs text-stone-500 dark:text-stone-400 font-mono text-right">
-                              {summary.completedTopics} of {summary.totalTopics} topics complete
-                            </div>
-                          </div>
-
-                          {/* Buddy progress */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs font-bold text-stone-800 dark:text-stone-200">
-                              <span>{studyBuddyData.buddy.name}</span>
-                              <span className="font-mono">{studyBuddyData.buddy.percentComplete}%</span>
-                            </div>
-                            <div className="h-2 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                                style={{ width: `${studyBuddyData.buddy.percentComplete}%` }}
-                              />
-                            </div>
-                            <div className="text-xs text-stone-500 dark:text-stone-400 font-mono text-right">
-                              {studyBuddyData.buddy.completedTopics} of {summary.totalTopics} topics complete
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-stone-200 dark:border-stone-800 pt-5 flex flex-col gap-2">
-                        <Button
-                          variant="secondary"
-                          className="w-full justify-center"
-                          disabled={rematchMutation.isPending}
-                          onClick={() => {
-                            if (window.confirm("Are you sure you want to rematch? This will assign a new buddy and automatically place your current buddy back in the matchmaking pool.")) {
-                              rematchMutation.mutate();
-                            }
-                          }}
-                        >
-                          {rematchMutation.isPending ? "Rematching..." : "Request Rematch"}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          className="w-full justify-center"
-                          disabled={optOutMutation.isPending}
-                          onClick={() => {
-                            if (window.confirm("Stop matching with this buddy? This will exit the program.")) {
-                              optOutMutation.mutate();
-                            }
-                          }}
-                        >
-                          {optOutMutation.isPending ? "Stopping..." : "Stop Matching"}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        {showEditModal && (
-          <>
-    {/* Backdrop */}
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={() => setShowEditModal(false)}
-      className="fixed inset-0 z-60 bg-stone-950/70 backdrop-blur-sm"
-    />
-
-    {/* Modal */}
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 20 }}
-      transition={{
-        type: "spring",
-        stiffness: 300,
-        damping: 24,
-      }}
-      className="fixed inset-0 z-70 flex items-center justify-center p-4"
-    >
-      <div
-        className="w-full max-w-2xl rounded-2xl border border-stone-800 bg-stone-950 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-800 px-6 py-5">
-          <h2 className="text-2xl font-bold text-stone-50">
-            Edit Roadmap Details
-          </h2>
-
-          <button
-            type="button"
-            onClick={() => setShowEditModal(false)}
-            className="rounded-md p-2 text-stone-500 hover:bg-stone-900 hover:text-stone-300"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="space-y-6 p-6">
-          {/* Title */}
-          <div>
-            <label className="mb-2 block text-[11px] font-mono uppercase tracking-[0.2em] text-stone-500">
-              Title
-            </label>
-
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-3 text-stone-50 outline-none focus:border-lime-500"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="mb-2 block text-[11px] font-mono uppercase tracking-[0.2em] text-stone-500">
-              Description
-            </label>
-
-            <textarea
-              rows={5}
-              value={shortDescription}
-              onChange={(e) =>
-                setShortDescription(e.target.value)
-              }
-              className="w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-3 text-stone-50 outline-none resize-none focus:border-lime-500"
-            />
-          </div>
-
-          {/* Level */}
-          <div>
-            <label className="mb-2 block text-[11px] font-mono uppercase tracking-[0.2em] text-stone-500">
-              Level
-            </label>
-
-            <select
-              value={level}
-                           onChange={(e) =>
-                setLevel(
-                  e.target.value as "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
-                )
-              }
-              className="w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-3 text-stone-50 outline-none focus:border-lime-500"
-            >
-              <option value="BEGINNER">
-                Beginner
-              </option>
-
-              <option value="INTERMEDIATE">
-                Intermediate
-              </option>
-
-              <option value="ADVANCED">
-                Advanced
-              </option>
-            </select>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-stone-800 px-6 py-5">
-          <Button
-            variant="ghost"
-            onClick={() => setShowEditModal(false)}
-          >
-            Cancel
-          </Button>
-
-          <Button
-            onClick={handleUpdateRoadmap}
-            className="bg-lime-400 text-stone-950 hover:bg-lime-300"
-          >
-            Save Changes
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  </>
-)}
-
         {/* ─── Roadmap Completion Modal ─────────────────────────────────── */}
         {showCompletionModal && (
           <RoadmapCompletionModal
             roadmapName={data.enrollment.roadmap.title}
-            shareToken={String(data.enrollment.shareToken)}
-            roadmapSlug={data.enrollment.roadmap.slug}
             onClose={() => setShowCompletionModal(false)}
           />
         )}
@@ -1935,7 +1643,7 @@ export default function RoadmapCanvasPage() {
                       {regenerateMutation.isPending ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <Wand2 className="w-3.5 h-3.5" />
+                        <Sparkles className="w-3.5 h-3.5" />
                       )}
                     </Button>
                   </div>
@@ -1957,19 +1665,19 @@ function RoadmapAnalyticsStrip({
 }) {
   const statusStyles = analytics
     ? {
-      AHEAD: "text-lime-300",
-      ON_TRACK: "text-sky-300",
-      BEHIND: "text-amber-300",
-    }[analytics.onTrackStatus]
+        AHEAD: "text-lime-300",
+        ON_TRACK: "text-sky-300",
+        BEHIND: "text-amber-300",
+      }[analytics.onTrackStatus]
     : "text-stone-500";
 
   const statusLabel =
     analytics?.onTrackStatus.replace("_", " ").toLowerCase() ?? "loading";
   const estimatedDate = analytics
     ? new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-    }).format(new Date(analytics.estimatedCompletionDate))
+        month: "short",
+        day: "numeric",
+      }).format(new Date(analytics.estimatedCompletionDate))
     : "calculating";
 
   return (
@@ -2148,8 +1856,9 @@ function StatusChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-bold transition-colors cursor-pointer border ${active ? activeBg : idle
-        }`}
+      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-bold transition-colors cursor-pointer border ${
+        active ? activeBg : idle
+      }`}
     >
       {children}
     </button>

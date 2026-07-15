@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getProviderForService } from "../../lib/ai-provider-registry.js";
+import { GeminiProvider } from "../../lib/providers/gemini.provider.js";
 import { logAIRequest } from "../../lib/ai-request-logger.js";
 import { slugify } from "../../utils/slug.utils.js";
 import type { AiGenerateInput } from "./roadmap.validation.js";
@@ -8,9 +8,6 @@ import {
   buildSectionPrompt,
   type RegenerateSectionPromptInput,
 } from "./roadmap.ai.prompts.js";
-import { createLogger } from "../../utils/logger.js";
-
-const logger = createLogger("RoadmapAI");
 
 // ── Retry helper ──────────────────────────────────────────────────────────
 const MAX_RETRIES = 2;
@@ -84,7 +81,7 @@ export async function generateAiRoadmap(
   input: AiGenerateInput,
   userId: number,
 ): Promise<GeneratedRoadmap> {
-  const provider = getProviderForService("AI_ROADMAP_GENERATION");
+  const provider = new GeminiProvider("gemini-2.5-flash-lite");
   const prompt = buildRoadmapPrompt(input);
 
   let lastError: Error | undefined;
@@ -104,7 +101,7 @@ export async function generateAiRoadmap(
 
       const result = aiRoadmapSchema.safeParse(parsed);
       if (!result.success) {
-        logger.error(`Validation failed (attempt ${attempt + 1})`, result.error.flatten());
+        console.error(`[AiRoadmap] Validation failed (attempt ${attempt + 1})`, result.error.flatten());
         throw new Error("AI returned an incomplete roadmap."); // retryable
       }
 
@@ -117,7 +114,7 @@ export async function generateAiRoadmap(
       }
 
       if (attempt < MAX_RETRIES) {
-        logger.warn(`Attempt ${attempt + 1} failed, retrying in ${BACKOFF_MS[attempt]}ms…`, lastError.message);
+        console.warn(`[AiRoadmap] Attempt ${attempt + 1} failed, retrying in ${BACKOFF_MS[attempt]}ms…`, lastError.message);
         await sleep(BACKOFF_MS[attempt]);
       }
     }
@@ -202,7 +199,7 @@ export async function regenerateSection(
   input: RegenerateSectionPromptInput,
   userId: number,
 ): Promise<RegeneratedSection> {
-  const provider = getProviderForService("AI_ROADMAP_GENERATION");
+  const provider = new GeminiProvider("gemini-2.5-flash-lite");
   const prompt = buildSectionPrompt(input);
 
   let lastError: Error | undefined;
@@ -222,7 +219,7 @@ export async function regenerateSection(
 
       const result = aiSectionRegenerateSchema.safeParse(parsed);
       if (!result.success) {
-        logger.error(`Section regeneration validation failed (attempt ${attempt + 1})`, result.error.flatten());
+        console.error(`[AiRoadmap] Section regeneration validation failed (attempt ${attempt + 1})`, result.error.flatten());
         throw new Error("AI returned an incomplete section.");
       }
 
@@ -235,7 +232,7 @@ export async function regenerateSection(
       }
 
       if (attempt < MAX_RETRIES) {
-        logger.warn(`Section attempt ${attempt + 1} failed, retrying in ${BACKOFF_MS[attempt]}ms…`, lastError.message);
+        console.warn(`[AiRoadmap] Section attempt ${attempt + 1} failed, retrying in ${BACKOFF_MS[attempt]}ms…`, lastError.message);
         await sleep(BACKOFF_MS[attempt]);
       }
     }

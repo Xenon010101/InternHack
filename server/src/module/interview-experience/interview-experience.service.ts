@@ -100,7 +100,7 @@ export class InterviewExperienceService {
     if (viewerId !== row.userId) {
       void prisma.interviewExperience
         .update({ where: { id }, data: { views: { increment: 1 } } })
-        .catch((err) => console.error("Failed to increment view count:", err));
+        .catch(() => {});
     }
 
     return { ...maskAnonymous(row), hasUpvoted };

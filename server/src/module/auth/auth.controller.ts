@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import {
-  type registerSchema,
-  type loginSchema,
-  type updateProfileSchema,
-  type importGitHubSchema,
+  registerSchema,
+  loginSchema,
+  updateProfileSchema,
+  importGitHubSchema,
   type forgotPasswordSchema,
   type resetPasswordSchema,
   type verifyEmailSchema,
@@ -14,31 +14,22 @@ import type { z } from "zod";
 import { AuthService } from "./auth.service.js";
 import { setTokenCookie, clearTokenCookie } from "../../utils/cookie.utils.js";
 
-/**
- * Returns the authenticated user, or sends a 401 and returns null. The routes
- * already gate on authMiddleware; this narrows the type and guards defensively.
- */
-function ensureAuthenticated(req: Request, res: Response): NonNullable<Request["user"]> | null {
-  if (!req.user) {
-    res.status(401).json({ message: "Authentication required" });
-    return null;
-  }
-  return req.user;
-}
-
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   async register(req: Request, res: Response) {
     try {
-      // Body is already validated & typed by route-level validateBody(registerSchema)
-      const input = req.body as z.infer<typeof registerSchema>;
+      const result = registerSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation failed", errors: result.error.flatten() });
+      }
 
-      const data = await this.authService.register(input);
-      return res.status(201).json({ message: "Registration successful. Please verify your email to continue.", user: data.user });
+      const data = await this.authService.register(result.data);
+      setTokenCookie(res, data.token);
+      return res.status(201).json({ message: "Registration successful", ...data });
     } catch (error) {
       if (error instanceof Error && error.message === "Email already registered") {
-        return res.status(201).json({ message: "Registration successful. Please verify your email to continue." });
+        return res.status(409).json({ message: error.message });
       }
       console.error(error);
       return res.status(500).json({ message: "Internal Server Error" });
@@ -47,10 +38,12 @@ export class AuthController {
 
   async login(req: Request, res: Response) {
     try {
-      // Body is already validated & typed by route-level validateBody(loginSchema)
-      const input = req.body as z.infer<typeof loginSchema>;
+      const result = loginSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation failed", errors: result.error.flatten() });
+      }
 
-      const data = await this.authService.login(input);
+      const data = await this.authService.login(result.data);
       setTokenCookie(res, data.token);
       return res.status(200).json({ message: "Login successful", ...data });
     } catch (error) {
@@ -77,9 +70,9 @@ export class AuthController {
   async googleAuth(req: Request, res: Response) {
     try {
       // Body is already validated & typed by route-level validateBody(googleAuthSchema)
-      const { credential, accessToken } = req.body as z.infer<typeof googleAuthSchema>;
+      const { credential, accessToken, role } = req.body as z.infer<typeof googleAuthSchema>;
 
-      const input: { credential?: string; accessToken?: string } = {};
+      const input: { credential?: string; accessToken?: string; role: "STUDENT" | "RECRUITER" } = { role };
       if (credential) input.credential = credential;
       if (accessToken) input.accessToken = accessToken;
       const data = await this.authService.googleAuth(input);
@@ -110,10 +103,11 @@ export class AuthController {
 
   async getProfile(req: Request, res: Response) {
     try {
-      const authUser = ensureAuthenticated(req, res);
-      if (!authUser) return;
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
 
-      const user = await this.authService.getProfile(authUser.id);
+      const user = await this.authService.getProfile(req.user.id);
       return res.status(200).json({ user });
     } catch (error) {
       console.error(error);
@@ -123,13 +117,16 @@ export class AuthController {
 
   async updateProfile(req: Request, res: Response) {
     try {
-      const authUser = ensureAuthenticated(req, res);
-      if (!authUser) return;
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
 
-      // Body is already validated & typed by route-level validateBody(updateProfileSchema)
-      const input = req.body as z.infer<typeof updateProfileSchema>;
+      const result = updateProfileSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation failed", errors: result.error.flatten() });
+      }
 
-      const user = await this.authService.updateProfile(authUser.id, input);
+      const user = await this.authService.updateProfile(req.user.id, result.data);
 
       return res.status(200).json({ message: "Profile updated successfully", user });
     } catch (error) {
@@ -140,39 +137,55 @@ export class AuthController {
 
   async getPublicProfile(req: Request, res: Response) {
     try {
-      const identifier = (req.params["identifier"] || req.params["id"]) as string;
-      if (!identifier) {
-        return res.status(400).json({ message: "Invalid user identifier" });
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      if (req.user.role !== "RECRUITER" && req.user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Not authorized" });
       }
 
-      // Pass visitor context (req.user) to the service so it can decide what to return
-      const visitor = req.user ? { id: req.user.id, role: req.user.role } : undefined;
-      const { profile, cacheHit } = await this.authService.getPublicProfile(identifier, visitor);
-
-      // Stale-while-revalidate: serve cached data instantly; background refresh after 60 s.
-      // Public profiles are safe to cache for guests; authorized views are omitted from CDN.
-      res.set("X-Cache", cacheHit ? "HIT" : "MISS");
-      if (!visitor) {
-        res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      } else {
-        res.set("Cache-Control", "private, no-store");
+      const id = Number(req.params["id"]);
+      if (!id || isNaN(id)) {
+        return res.status(400).json({ message: "Invalid user ID" });
       }
 
+      const profile = await this.authService.getPublicProfile(id);
       return res.status(200).json({ profile });
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "User not found") {
-          return res.status(404).json({ message: error.message });
-        }
-        if (error.message === "Profile is private") {
-          return res.status(403).json({ message: "This profile is private." });
-        }
+      if (error instanceof Error && error.message === "User not found") {
+        return res.status(404).json({ message: error.message });
       }
       console.error(error);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
 
+  async getGitHubStats(req: Request, res: Response) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const username = typeof req.query["username"] === "string" ? req.query["username"] : "";
+      if (!username.trim()) {
+        return res.status(400).json({ message: "GitHub username is required" });
+      }
+
+      const stats = await this.authService.getGitHubStats(username);
+      return res.status(200).json({ stats });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "GitHub user not found") {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error.message === "GitHub username is required") {
+          return res.status(400).json({ message: error.message });
+        }
+      }
+      console.error(error);
+      return res.status(500).json({ message: "Failed to fetch GitHub stats" });
+    }
+  }
 
   async verifyEmail(req: Request, res: Response) {
     // Body is already validated & typed by route-level validateBody(verifyEmailSchema)
@@ -211,16 +224,19 @@ export class AuthController {
 
   async importGitHub(req: Request, res: Response) {
     try {
-      const authUser = ensureAuthenticated(req, res);
-      if (!authUser) return;
-      if (authUser.role !== "STUDENT") {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      if (req.user.role !== "STUDENT") {
         return res.status(403).json({ message: "Only students can import GitHub profiles" });
       }
 
-      // Body is already validated & typed by route-level validateBody(importGitHubSchema)
-      const { username } = req.body as z.infer<typeof importGitHubSchema>;
+      const result = importGitHubSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation failed", errors: result.error.flatten() });
+      }
 
-      const data = await this.authService.importGitHub(username);
+      const data = await this.authService.importGitHub(result.data.username);
       return res.status(200).json(data);
     } catch (error) {
       if (error instanceof Error && error.message === "GitHub user not found") {
@@ -238,30 +254,7 @@ export class AuthController {
       await this.authService.resetPassword(email, otp, newPassword);
       return res.json({ message: "Password reset successfully" });
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Password reset failed";
-      // Return 429 for lockout/rate-limit errors, 400 for other validation errors
-      const statusCode = errorMessage.includes("Too many failed attempts") || errorMessage.includes("locked for")
-        ? 429
-        : 400;
-      return res.status(statusCode).json({ message: errorMessage });
-    }
-  }
-
-  async deleteAccount(req: Request, res: Response) {
-    try {
-      const authUser = ensureAuthenticated(req, res);
-      if (!authUser) return;
-
-      const { password } = req.body as { password: string };
-      await this.authService.deleteAccount(authUser.id, password);
-      clearTokenCookie(res);
-      return res.status(200).json({ message: "Account deleted successfully" });
-    } catch (error) {
-      if (error instanceof Error && error.message === "Incorrect password") {
-        return res.status(401).json({ message: error.message });
-      }
-      console.error(error);
-      return res.status(500).json({ message: "Internal Server Error" });
+      return res.status(400).json({ message: err instanceof Error ? err.message : "Password reset failed" });
     }
   }
 }

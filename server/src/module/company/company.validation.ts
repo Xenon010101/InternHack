@@ -25,6 +25,7 @@ export const submitReviewSchema = z.object({
 export const contributeCompanySchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().min(10).max(5000),
+  mission: z.string().max(2000).optional(),
   industry: z.string().min(1).max(100),
   size: z.enum(["STARTUP", "SMALL", "MEDIUM", "LARGE", "ENTERPRISE"]),
   city: z.string().min(1).max(100),
@@ -38,12 +39,8 @@ export const contributeCompanySchema = z.object({
 });
 
 export const suggestEditSchema = z.object({
-  changes: z.record(z.string(), z.unknown()).refine((val) => Object.keys(val).length > 0, {
-    message: "At least one change is required",
-  }),
+  changes: z.record(z.string(), z.unknown()),
   reason: z.string().min(1).max(1000),
-}).refine((data) => Object.keys(data.changes).length > 0, {
-  message: "At least one change must be provided",
 });
 
 export const addContactSchema = z.object({

@@ -13,14 +13,11 @@ interface ActivityResponse {
 
 const formatActivityDate = (date: string) => {
   const [year, month, day] = date.split("-").map(Number);
-  return new Date(year, (month ?? 1) - 1, day ?? 1).toLocaleDateString(
-    undefined,
-    {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    },
-  );
+  return new Date(year, (month ?? 1) - 1, day ?? 1).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 };
 
 export function DsaHeatmap() {
@@ -29,10 +26,7 @@ export function DsaHeatmap() {
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dsa.activity(year),
-    queryFn: () =>
-      api
-        .get<ActivityResponse[]>(`/dsa/activity?year=${year}`)
-        .then((res) => res.data),
+    queryFn: () => api.get<ActivityResponse[]>(`/dsa/activity?year=${year}`).then((res) => res.data),
     staleTime: year < new Date().getUTCFullYear() ? Infinity : 10 * 60 * 1000,
   });
 
@@ -48,11 +42,7 @@ export function DsaHeatmap() {
     const startDate = new Date(Date.UTC(year, 0, 1));
     const endDate = new Date(Date.UTC(year, 11, 31));
 
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setUTCDate(d.getUTCDate() + 1)
-    ) {
+    for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
       const dateStr = d.toISOString().split("T")[0];
       const count = activityMap.get(dateStr) || 0;
 
@@ -72,10 +62,7 @@ export function DsaHeatmap() {
     return result;
   }, [data, year]);
 
-  const totalSolvedThisYear = heatmapData.reduce(
-    (acc, curr) => acc + curr.count,
-    0,
-  );
+  const totalSolvedThisYear = heatmapData.reduce((acc, curr) => acc + curr.count, 0);
 
   return (
     <section className="mb-8">
@@ -86,7 +73,7 @@ export function DsaHeatmap() {
             practice history
           </span>
         </div>
-
+        
         {/* Year Selector */}
         <div className="flex items-center gap-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-md p-1">
           <button
@@ -114,22 +101,14 @@ export function DsaHeatmap() {
         <div className="w-full flex justify-center [&_.react-activity-calendar]:w-full [&_svg]:w-full [&_svg]:h-auto [&_svg]:max-w-[850px]">
           {isLoading ? (
             <div className="h-[120px] flex items-center justify-center w-full">
-              <span className="text-sm font-mono text-stone-400">
-                Loading history...
-              </span>
+              <span className="text-sm font-mono text-stone-400">Loading history...</span>
             </div>
           ) : (
             <div className="w-full flex justify-center">
               <ActivityCalendar
                 data={heatmapData}
                 theme={{
-                  light: [
-                    "#f5f5f4",
-                    "#d9f99d",
-                    "#a3e635",
-                    "#65a30d",
-                    "#3f6212",
-                  ],
+                  light: ["#f5f5f4", "#d9f99d", "#a3e635", "#65a30d", "#3f6212"],
                   dark: ["#1c1917", "#d9f99d", "#a3e635", "#65a30d", "#3f6212"],
                 }}
                 colorScheme={theme === "dark" ? "dark" : "light"}
@@ -141,21 +120,18 @@ export function DsaHeatmap() {
                 }}
                 showColorLegend={false}
                 showTotalCount={false}
-                renderBlock={(
-                  block: React.ReactElement,
-                  activity: { date: string; count: number; level: number },
-                ) =>
+                renderBlock={(block: React.ReactElement, activity: { date: string; count: number; level: number }) =>
                   React.cloneElement(
                     block,
                     {},
-                    <title>{`${activity.count} problems solved on ${formatActivityDate(activity.date)}`}</title>,
+                    <title>{`${activity.count} problems solved on ${formatActivityDate(activity.date)}`}</title>
                   )
                 }
               />
             </div>
           )}
         </div>
-
+        
         <div className="mt-5 flex items-center justify-between text-sm text-stone-500 dark:text-stone-400">
           <span className="font-medium text-stone-700 dark:text-stone-300">
             {totalSolvedThisYear} problems this year

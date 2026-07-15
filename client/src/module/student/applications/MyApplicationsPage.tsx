@@ -1,19 +1,15 @@
-import { formatDate } from "../../../lib/date-utils";
 import DailyInterviewTipWidget from "./DailyInterviewTipWidget";
 import { Link } from "react-router";
-import { useClearFilters } from "../../../hooks/useClearFilters";
 import { motion } from "framer-motion";
 import { Briefcase, MapPin, Building2, ArrowUpRight, Clock, Search, ExternalLink, X, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { useSearchWithDebounce } from "../../../hooks/useSearchWithDebounce";
 import api from "../../../lib/axios";
 import { queryKeys } from "../../../lib/query-keys";
-import type { ExternalApplication } from "../../../lib/types";
+import type { Application, ExternalApplication } from "../../../lib/types";
 import { LoadingScreen } from "../../../components/LoadingScreen";
 import { SEO } from "../../../components/SEO";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { ApplicationNotes } from "./ApplicationNotes";
 import toast from "@/components/ui/toast";
 
@@ -26,8 +22,127 @@ function Kicker({ children }: { children: React.ReactNode }) {
   );
 }
 
-import { CompanyMark } from "../../../components/ui/CompanyMark";
+function CompanyMark({ label }: { label: string }) {
+  return (
+    <div className="w-10 h-10 rounded-md bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-white/10 flex items-center justify-center shrink-0 text-stone-900 dark:text-stone-50 text-sm font-bold">
+      {label?.charAt(0)?.toUpperCase() || "?"}
+    </div>
+  );
+}
 
+function statusClass(status: string) {
+  switch (status) {
+    case "APPLIED":
+      return "text-stone-900 dark:text-stone-50 border-stone-300 dark:border-white/20";
+    case "IN_PROGRESS":
+      return "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-900/60";
+    case "SHORTLISTED":
+      return "text-lime-700 dark:text-lime-400 border-lime-400";
+    case "HIRED":
+      return "text-lime-700 dark:text-lime-400 border-lime-400 bg-lime-50 dark:bg-lime-950/40";
+    case "REJECTED":
+      return "text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/60";
+    case "WITHDRAWN":
+      return "text-stone-400 border-stone-200 dark:border-white/10";
+    default:
+      return "text-stone-500 border-stone-200 dark:border-white/10";
+  }
+}
+
+const ApplicationCard = React.memo(function ApplicationCard({
+  app,
+  onWithdraw,
+}: {
+  app: Application;
+  onWithdraw: (id: number) => void;
+}) {
+  const completed = app.roundSubmissions?.filter((s) => s.status === "COMPLETED").length ?? 0;
+  const totalRounds = app.roundSubmissions?.length ?? 0;
+
+  return (
+    <div className="group relative flex flex-col bg-white dark:bg-stone-900 p-5 rounded-md border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/30 transition-colors">
+      <div className="flex items-start gap-4">
+        <CompanyMark label={app.job?.company || "?"} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link to={`/student/applications/${app.id}`} className="no-underline">
+                <h3 className="text-base font-bold tracking-tight text-stone-900 dark:text-stone-50 truncate leading-tight hover:text-lime-600 dark:hover:text-lime-400 transition-colors">
+                  {app.job?.title}
+                </h3>
+              </Link>
+              <div className="flex items-center gap-x-3 gap-y-1 mt-1 text-xs text-stone-500 flex-wrap">
+                <span className="flex items-center gap-1 truncate">
+                  <Building2 className="w-3 h-3 shrink-0" />
+                  {app.job?.company}
+                </span>
+                <span className="flex items-center gap-1 truncate">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  {app.job?.location}
+                </span>
+              </div>
+            </div>
+            <span
+              className={`inline-flex shrink-0 px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest border rounded-md ${statusClass(app.status)}`}
+            >
+              {app.status.replace("_", " ")}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-stone-200 dark:border-white/10 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-x-4 gap-y-1 text-[10px] font-mono uppercase tracking-widest text-stone-500 flex-wrap">
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3" />
+            Applied{" "}
+            {new Date(app.createdAt).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+          {totalRounds > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="flex gap-0.5">
+                {app.roundSubmissions!.map((s, idx) => (
+                  <span
+                    key={idx}
+                    className={`h-1.5 w-3 ${s.status === "COMPLETED" ? "bg-lime-400" : "bg-stone-200 dark:bg-stone-700"}`}
+                  />
+                ))}
+              </span>
+              {completed}/{totalRounds} rounds
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {app.status !== "WITHDRAWN" && app.status !== "REJECTED" && app.status !== "HIRED" && (
+            <button
+              onClick={() => onWithdraw(app.id)}
+              className="text-[10px] font-mono uppercase tracking-widest text-stone-500 hover:text-red-500 transition-colors bg-transparent border-0 cursor-pointer px-2 py-1"
+            >
+              Withdraw
+            </button>
+          )}
+          <Link
+            to={`/student/applications/${app.id}`}
+            className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-stone-900 dark:text-stone-50 hover:text-lime-600 dark:hover:text-lime-400 no-underline transition-colors"
+          >
+            View <ArrowUpRight className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+
+      <ApplicationNotes
+        applicationId={app.id}
+        kind="internal"
+        notes={app.studentNotes}
+      />
+    </div>
+  );
+});
 
 const ExternalApplicationCard = React.memo(function ExternalApplicationCard({
   app,
@@ -43,7 +158,7 @@ const ExternalApplicationCard = React.memo(function ExternalApplicationCard({
         external
       </span>
       <div className="flex items-start gap-4 pr-16">
-        <CompanyMark name={app.adminJob.company || "?"} />
+        <CompanyMark label={app.adminJob.company || "?"} />
         <div className="flex-1 min-w-0">
           <Link
             to={app.adminJob.slug ? `/jobs/ext/${app.adminJob.slug}` : "#"}
@@ -72,7 +187,11 @@ const ExternalApplicationCard = React.memo(function ExternalApplicationCard({
         <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-stone-500">
           <Clock className="w-3 h-3" />
           Applied{" "}
-          {formatDate(app.createdAt)}
+          {new Date(app.createdAt).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -96,6 +215,7 @@ const ExternalApplicationCard = React.memo(function ExternalApplicationCard({
 
       <ApplicationNotes
         applicationId={app.id}
+        kind="external"
         notes={app.studentNotes}
       />
     </div>
@@ -103,22 +223,47 @@ const ExternalApplicationCard = React.memo(function ExternalApplicationCard({
 });
 
 const PAGE_SIZE = 10;
+const STATUS_ORDER: Record<string, number> = {
+  APPLIED: 0,
+  IN_PROGRESS: 1,
+  SHORTLISTED: 2,
+  HIRED: 3,
+  REJECTED: 4,
+  WITHDRAWN: 5,
+};
+
+function sortApplications(
+  apps: Application[],
+  option: "newest" | "oldest" | "company" | "status"
+): Application[] {
+  return [...apps].sort((a, b) => {
+    if (option === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (option === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (option === "company") return (a.job?.company ?? "").localeCompare(b.job?.company ?? "");
+    if (option === "status") return (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+    return 0;
+  });
+}
+
+type PendingDelete =
+  | { kind: "internal"; id: number }
+  | { kind: "external"; id: number };
 
 export default function MyApplicationsPage() {
   const queryClient = useQueryClient();
-  const { inputValue: search, setInputValue: setSearch, debouncedValue: debouncedSearch } =
-    useSearchWithDebounce({ delay: 200 });
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
-  const [sortOption, setSortOption] = useState<"newest" | "oldest" | "company">("newest");
-
-  const clearFilters = useClearFilters([
-    () => setSearch(""),
-    () => setPage(1),
-  ]);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [sortOption, setSortOption] = useState<"newest" | "oldest" | "company" | "status">("newest");
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset to first page when filters change
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [debouncedSearch]);
 
@@ -126,71 +271,119 @@ export default function MyApplicationsPage() {
     queryKey: queryKeys.applications.mine(),
     queryFn: () =>
       api.get("/student/applications").then(
-        (res) => res.data as { externalApplications: ExternalApplication[] }
+        (res) => res.data as { applications: Application[]; externalApplications: ExternalApplication[] }
       ),
     staleTime: 2 * 60 * 1000,
   });
 
+  const applications = useMemo(() => data?.applications ?? [], [data]);
   const externalApplications = useMemo(() => data?.externalApplications ?? [], [data]);
 
-  const filteredExternal = useMemo(() => {
+  const filtered = useMemo(() => {
     const base = !debouncedSearch.trim()
-      ? externalApplications
-      : externalApplications.filter(
+      ? applications
+      : applications.filter(
+        (a) => a.job?.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) || a.job?.company?.toLowerCase().includes(debouncedSearch.toLowerCase())
+      );
+    return sortApplications(base, sortOption);
+  }, [applications, debouncedSearch, sortOption]);
+
+ const filteredExternal = useMemo(() => {
+  const base = !debouncedSearch.trim()
+    ? externalApplications
+    : externalApplications.filter(
         (a) =>
           a.adminJob.role?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
           a.adminJob.company?.toLowerCase().includes(debouncedSearch.toLowerCase())
       );
+  return [...base].sort((a, b) => {
+    if (sortOption === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortOption === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortOption === "company") return (a.adminJob.company ?? "").localeCompare(b.adminJob.company ?? "");
+    return 0;
+  });
+}, [externalApplications, debouncedSearch, sortOption]);
 
-    return [...base].sort((a, b) => {
-      if (sortOption === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      if (sortOption === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      if (sortOption === "company") return (a.adminJob.company ?? "").localeCompare(b.adminJob.company ?? "");
-      return 0;
-    });
-  }, [externalApplications, debouncedSearch, sortOption]);
-
-  const totalAll = externalApplications.length;
-  const totalFiltered = filteredExternal.length;
+  const totalAll = applications.length + externalApplications.length;
+  const totalFiltered = filtered.length + filteredExternal.length;
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await api.delete(`/student/external-applications/${id}`);
-      return id;
+    mutationFn: async (item: PendingDelete) => {
+      if (item.kind === "internal") {
+        await api.delete(`/student/applications/${item.id}`);
+      } else {
+        await api.delete(`/student/external-applications/${item.id}`);
+      }
+      return item;
     },
-    onSuccess: (id) => {
-      queryClient.setQueryData<{ externalApplications: ExternalApplication[] }>(
-        queryKeys.applications.mine(),
-        (old) => {
+    onSuccess: (item) => {
+      if (item.kind === "internal") {
+        queryClient.setQueryData<{
+          applications: Application[];
+          externalApplications: ExternalApplication[];
+        }>(queryKeys.applications.mine(), (old) => {
           if (!old) return old;
           return {
             ...old,
-            externalApplications: old.externalApplications.filter((a) => a.id !== id),
+            applications: old.applications.map((a) =>
+              a.id === item.id ? { ...a, status: "WITHDRAWN" as const } : a
+            ),
           };
-        }
-      );
-      toast.success("Application removed");
+        });
+        toast.success("Application withdrawn successfully");
+      } else {
+        queryClient.setQueryData<{
+          applications: Application[];
+          externalApplications: ExternalApplication[];
+        }>(queryKeys.applications.mine(), (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            externalApplications: old.externalApplications.filter((a) => a.id !== item.id),
+          };
+        });
+        toast.success("Application removed");
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.applications.mine() });
     },
-    onError: () => {
-      toast.error("Failed to remove application");
+    onError: (_err, item) => {
+      toast.error(
+        item.kind === "internal"
+          ? "Failed to withdraw application"
+          : "Failed to remove application"
+      );
     },
   });
 
+  const handleWithdraw = useCallback((id: number) => {
+    setPendingDelete({ kind: "internal", id });
+  }, []);
+
   const handleRemoveExternal = useCallback((id: number) => {
-    setPendingDeleteId(id);
+    setPendingDelete({ kind: "external", id });
   }, []);
 
   const confirmDelete = useCallback(() => {
-    if (pendingDeleteId === null) return;
-    const id = pendingDeleteId;
-    setPendingDeleteId(null);
-    deleteMutation.mutate(id);
-  }, [pendingDeleteId, deleteMutation]);
+    if (!pendingDelete) return;
+    const item = pendingDelete;
+    setPendingDelete(null);
+    deleteMutation.mutate(item);
+  }, [pendingDelete, deleteMutation]);
 
-  const cancelDelete = useCallback(() => setPendingDeleteId(null), []);
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+
+  const isInternalDelete = pendingDelete?.kind === "internal";
+  const confirmTitle = isInternalDelete
+    ? "Withdraw application?"
+    : "Remove tracked application?";
+  const confirmDescription = isInternalDelete
+    ? "The recruiter will see this change. This action cannot be undone."
+    : "This only removes it from your list. The job posting won't be affected.";
+  const confirmLabel = isInternalDelete ? "Withdraw" : "Remove";
 
   if (isLoading) return <LoadingScreen />;
+
+
 
   const hasSearch = search.trim().length > 0;
 
@@ -198,10 +391,10 @@ export default function MyApplicationsPage() {
     <div className="relative pb-16">
       <SEO title="My Applications" noIndex />
       <ConfirmDialog
-        open={pendingDeleteId !== null}
-        title="Remove tracked application?"
-        description="This only removes it from your list. The job posting won't be affected."
-        confirmLabel="Remove"
+        open={pendingDelete !== null}
+        title={confirmTitle}
+        description={confirmDescription}
+        confirmLabel={confirmLabel}
         cancelLabel="Cancel"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
@@ -229,7 +422,7 @@ export default function MyApplicationsPage() {
             </span>
           </h1>
           <p className="mt-3 text-sm text-stone-500 max-w-md">
-            Every application you have submitted, in one place.
+            Every application you have submitted, internal and external, in one place.
           </p>
         </div>
         {totalAll > 0 && (
@@ -259,12 +452,10 @@ export default function MyApplicationsPage() {
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
           <option value="company">Company A–Z</option>
+          <option value="status">Status</option>
         </select>
       </div>
-
       {/* Search */}
-
-
       <DailyInterviewTipWidget />
       <div className="mb-5 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
@@ -280,7 +471,7 @@ export default function MyApplicationsPage() {
       {hasSearch && (
         <div className="mb-6">
           <button
-            onClick={clearFilters}
+            onClick={() => setSearch("")}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-mono uppercase tracking-widest text-stone-500 hover:text-red-500 transition-colors border-0 bg-transparent cursor-pointer"
           >
             <X className="w-3 h-3" /> clear search
@@ -301,47 +492,53 @@ export default function MyApplicationsPage() {
             Start exploring jobs and submit your first application to see it tracked here.
           </p>
           <Link
-            to="/external-jobs"
+            to="/student/jobs"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-lime-400 hover:bg-lime-500 text-stone-900 rounded-md text-sm font-semibold no-underline transition-colors"
           >
             Browse jobs <ArrowUpRight className="w-4 h-4" />
           </Link>
         </div>
-      ) : filteredExternal.length === 0 ? (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <EmptyState
-            icon={<Search className="w-6 h-6 text-stone-400 dark:text-stone-600" />}
-            title="No applications match your search"
-            action={
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold bg-stone-900 dark:bg-stone-50 text-stone-50 dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-stone-200 transition-colors border-0 cursor-pointer mt-2"
-              >
-                Clear search
-              </button>
-            }
-          />
-        </motion.div>
+      ) : filtered.length === 0 && filteredExternal.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-stone-900 rounded-md border border-stone-200 dark:border-white/10">
+          <Search className="w-8 h-8 text-stone-400 mx-auto mb-3" />
+          <p className="text-sm text-stone-500">No applications match your search.</p>
+          <button
+            onClick={() => setSearch("")}
+            className="mt-3 text-[10px] font-mono uppercase tracking-widest text-stone-900 dark:text-stone-50 hover:text-lime-600 dark:hover:text-lime-400 bg-transparent border-0 cursor-pointer"
+          >
+            Clear search
+          </button>
+        </div>
       ) : (
         (() => {
-          const totalResults = filteredExternal.length;
+          const combined: Array<
+            | { kind: "internal"; app: Application }
+            | { kind: "external"; app: ExternalApplication }
+          > = [
+              ...filtered.map((app) => ({ kind: "internal" as const, app })),
+              ...filteredExternal.map((app) => ({ kind: "external" as const, app })),
+            ];
+          const totalResults = combined.length;
           const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
           const safePage = Math.min(page, totalPages);
           const start = (safePage - 1) * PAGE_SIZE;
-          const pageItems = filteredExternal.slice(start, start + PAGE_SIZE);
+          const pageItems = combined.slice(start, start + PAGE_SIZE);
 
           return (
             <>
               <div className="space-y-3">
-                {pageItems.map((app, i) => (
+                {pageItems.map((item, i) => (
                   <motion.div
-                    key={app.id}
+                    key={item.kind === "internal" ? item.app.id : `ext-${item.app.id}`}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03, duration: 0.25 }}
                   >
-                    <ExternalApplicationCard app={app} onRemove={handleRemoveExternal} />
+                    {item.kind === "internal" ? (
+                      <ApplicationCard app={item.app} onWithdraw={handleWithdraw} />
+                    ) : (
+                      <ExternalApplicationCard app={item.app} onRemove={handleRemoveExternal} />
+                    )}
                   </motion.div>
                 ))}
               </div>

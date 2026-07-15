@@ -1,2 +1,0 @@
-export const SELECT_CLASS =
-  'text-sm bg-white dark:bg-stone-950 border border-stone-200 dark:border-white/10 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-lime-400 cursor-pointer';

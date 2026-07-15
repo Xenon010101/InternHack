@@ -21,7 +21,7 @@ import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
 import { reportMilestone } from "../../../lib/milestone.utils";
-import { DIFF_COLOR } from "../../../lib/difficulty-styles";
+import { DIFF_COLOR } from "../../../lib/difficulty-colors";
 
 const FREE_LIMIT = 5;
 
@@ -37,7 +37,7 @@ function toggleProgress(lessonId: string): boolean {
   const progress = getLocalProgress();
   const current = progress[lessonId]?.completed ?? false;
   progress[lessonId] = { ...progress[lessonId], completed: !current };
-  try { localStorage.setItem("node-progress", JSON.stringify(progress)); } catch { console.warn("Failed to persist to localStorage: node-progress"); }
+  localStorage.setItem("node-progress", JSON.stringify(progress));
   return !current;
 }
 

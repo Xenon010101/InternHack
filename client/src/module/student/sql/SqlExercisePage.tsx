@@ -28,10 +28,9 @@ import type { TableInfo } from "./lib/sql-engine";
 import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
-import { toast } from "react-hot-toast";
 import api from "../../../lib/axios";
 import { queryKeys } from "../../../lib/query-keys";
-import { DIFF_COLOR } from "../../../lib/difficulty-styles";
+import { DIFF_COLOR } from "../../../lib/difficulty-colors";
 
 type SqlProgress = Record<string, { solved: boolean; code: string | null }>;
 
@@ -39,7 +38,6 @@ function getLocalProgress(): SqlProgress {
   try {
     return JSON.parse(localStorage.getItem("sql-progress") || "{}");
   } catch {
-    console.warn("Failed to parse sql-progress from localStorage");
     return {};
   }
 }
@@ -47,7 +45,7 @@ function getLocalProgress(): SqlProgress {
 function saveLocalProgress(id: string, solved: boolean, code: string) {
   const progress = getLocalProgress();
   progress[id] = { solved, code };
-  try { localStorage.setItem("sql-progress", JSON.stringify(progress)); } catch { console.warn("Failed to persist to localStorage: sql-progress"); }
+  localStorage.setItem("sql-progress", JSON.stringify(progress));
 }
 
 function useSqlProgress() {
@@ -65,7 +63,6 @@ function useSqlProgress() {
     mutationFn: (vars: { exerciseId: string; solved: boolean; code: string }) =>
       api.post("/sql/progress", vars),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.sql.progress() }),
-    onError: () => toast.error("Failed to save progress. Please try again."),
   });
 
   const progress: SqlProgress = isAuthenticated ? (serverProgress ?? {}) : getLocalProgress();
@@ -121,40 +118,40 @@ export default function SqlExercisePage() {
   const [dbReady, setDbReady] = useState(false);
   const [solved, setSolved] = useState(false);
 
-  // Reset and load exercise
+  // Load database and exercise
   useEffect(() => {
     if (!exercise || !section) return;
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDbReady(false);
-    setResult(null);
-    setValidation(null);
-    setShowHints(0);
-    setShowExpected(false);
-
-    const savedEntry = progress[exercise.id];
-    setCode(savedEntry?.code || exercise.starterCode || "");
-    setSolved(!!savedEntry?.solved);
-
-    let isCancelled = false;
 
     const load = async () => {
       const datasetSql = datasets[exercise.dataset];
       if (datasetSql) {
         await sqlEngine.resetDataset(exercise.dataset, datasetSql);
       }
-      if (!isCancelled) {
-        setSchema(sqlEngine.getSchema());
-        setDbReady(true);
-      }
+      setSchema(sqlEngine.getSchema());
+      setDbReady(true);
     };
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDbReady(false);
+     
+    setResult(null);
+     
+    setValidation(null);
+     
+    setShowHints(0);
+     
+    setShowExpected(false);
+
+    // Restore saved code or use starter
+    const savedEntry = progress[exercise.id];
+     
+    setCode(savedEntry?.code || exercise.starterCode);
+     
+    setSolved(!!savedEntry?.solved);
 
     load();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [exercise, section, progress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercise?.id, section?.id, progress]);
 
   const handleRun = useCallback(async () => {
     if (!exercise || !dbReady) return;

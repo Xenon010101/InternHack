@@ -1,6 +1,5 @@
 import { prisma } from "../../database/db.js";
 import { sendEmail, sendEmailBatch, emailSleep } from "../../utils/email.utils.js";
-import { buildUnsubscribeUrl } from "../../utils/unsubscribe.utils.js";
 import { switchServiceProvider } from "../../lib/ai-provider-registry.js";
 import { slugifyWithSuffix } from "../../utils/slug.utils.js";
 import type { Prisma, UserRole, AIServiceType, AIProviderType } from "@prisma/client";
@@ -137,7 +136,7 @@ export class AdminEventsService {
   async sendBroadcastEmail(input: {
     subject: string;
     body: string;
-    filter: { role: "STUDENT" | "ADMIN" | "ALL"; isVerified?: boolean | undefined; subscriptionPlan: "FREE" | "MONTHLY" | "YEARLY" | "ALL" };
+    filter: { role: "STUDENT" | "RECRUITER" | "ADMIN" | "ALL"; isVerified?: boolean | undefined; subscriptionPlan: "FREE" | "MONTHLY" | "YEARLY" | "ALL" };
     testEmail?: string | undefined;
     adminId: number;
   }) {
@@ -155,14 +154,14 @@ export class AdminEventsService {
       return { test: true, sent: 1, failed: 0, recipients: 1 };
     }
 
-    const where: Prisma.userWhereInput = { isActive: true, unsubscribeDigest: false };
+    const where: Prisma.userWhereInput = { isActive: true };
     if (input.filter.role !== "ALL") where.role = input.filter.role as UserRole;
     if (typeof input.filter.isVerified === "boolean") where.isVerified = input.filter.isVerified;
     if (input.filter.subscriptionPlan !== "ALL") {
       where.subscriptionPlan = input.filter.subscriptionPlan as Prisma.userWhereInput["subscriptionPlan"];
     }
 
-    const users = await prisma.user.findMany({ where, select: { id: true, email: true, name: true } });
+    const users = await prisma.user.findMany({ where, select: { email: true, name: true } });
 
     const personalize = (template: string, name: string | null, email: string) => {
       const username = (name && name.trim()) || (email.split("@")[0] ?? "there");
@@ -185,7 +184,6 @@ export class AdminEventsService {
         to: u.email,
         subject: personalize(input.subject, u.name, u.email),
         html: personalize(html, u.name, u.email),
-        unsubscribeUrl: buildUnsubscribeUrl(u.id),
       }));
       const result = await sendEmailBatch(payload);
       sent += result.sent;
@@ -207,7 +205,8 @@ export class AdminEventsService {
       GEMINI: !!process.env["GEMINI_API_KEY"],
       GROQ: !!process.env["GROQ_API_KEY"],
       OPENROUTER: !!process.env["OPENROUTER_API_KEY"],
-      CODESTRAL: !!process.env["CODESTRAL_API_KEY"]
+      CODESTRAL: !!process.env["CODESTRAL_API_KEY"],
+      CLAUDE: !!process.env["CLAUDE_API"],
     };
 
     return { configs, envStatus };

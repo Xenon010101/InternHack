@@ -65,8 +65,6 @@ function Particle({
 // ── Main modal component ────────────────────────────────────────────────────
 interface RoadmapCompletionModalProps {
   roadmapName: string;
-  shareToken: string;
-  roadmapSlug: string;
   onClose: () => void;
 }
 
@@ -87,10 +85,8 @@ const PARTICLES = Array.from({ length: 18 }, (_, i) => ({
   y: 10 + (i * 67) % 60,
 }));
 
-export default function RoadmapCompletionModal({
+export function RoadmapCompletionModal({
   roadmapName,
-  shareToken,
-  roadmapSlug,
   onClose,
 }: RoadmapCompletionModalProps) {
   // Close on Escape
@@ -109,32 +105,17 @@ export default function RoadmapCompletionModal({
   }, []);
 
   // ── Share text builders ──────────────────────────────────────────────────
-  const safeRoadmapName = roadmapName || "Roadmap";
-
-  const tag = safeRoadmapName.replace(/\s+/g, "");
+  const tag = roadmapName.replace(/\s+/g, "");
   const twitterText = encodeURIComponent(
-    `🎉 Just completed the ${safeRoadmapName} roadmap on InternHack! #InternHack #CareerGrowth #${tag}`
+    `🎉 Just completed the ${roadmapName} roadmap on InternHack! #InternHack #CareerGrowth #${tag}`
   );
   const linkedInText = encodeURIComponent(
-    `I just completed the ${safeRoadmapName} roadmap on InternHack! Check it out at https://www.internhack.xyz #InternHack #CareerGrowth`
+    `I just completed the ${roadmapName} roadmap on InternHack! Check it out at https://www.internhack.xyz #InternHack #CareerGrowth`
   );
   const linkedInUrl = encodeURIComponent("https://www.internhack.xyz");
 
-  const certificateUrl =
-  `${window.location.origin}/api/roadmaps/certificates/${roadmapSlug}/${shareToken}`;
-
-  const shareableCertificateUrl =
-    `${window.location.origin}/learn/roadmaps/certificates/${roadmapSlug}/${shareToken}`;
-
-  const linkedInAddToProfileUrl =
-    `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME` +
-    `&name=${encodeURIComponent(`${safeRoadmapName} Roadmap`)}` +
-    `&organizationName=${encodeURIComponent("InternHack")}` +
-    `&issueYear=${new Date().getFullYear()}` +
-    `&certUrl=${encodeURIComponent(shareableCertificateUrl)}`;
-
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
-  const linkedInShareUrl = `https://www.linkedin.com/shareArticle?mini=true&url=${linkedInUrl}&summary=${linkedInText}&title=${encodeURIComponent(`I completed the ${safeRoadmapName} roadmap!`)}`;
+  const linkedInShareUrl = `https://www.linkedin.com/shareArticle?mini=true&url=${linkedInUrl}&summary=${linkedInText}&title=${encodeURIComponent(`I completed the ${roadmapName} roadmap!`)}`;
 
   const openShare = (url: string) => {
     window.open(url, "_blank", "noopener,noreferrer,width=600,height=500");
@@ -146,8 +127,8 @@ export default function RoadmapCompletionModal({
   const handleNativeShare = async () => {
     try {
       await navigator.share({
-        title: `Completed: ${safeRoadmapName} Roadmap`,
-        text: `🎉 Just completed the ${safeRoadmapName} roadmap on InternHack! #InternHack #CareerGrowth`,
+        title: `Completed: ${roadmapName} Roadmap`,
+        text: `🎉 Just completed the ${roadmapName} roadmap on InternHack! #InternHack #CareerGrowth`,
         url: "https://www.internhack.xyz",
       });
     } catch {
@@ -179,9 +160,9 @@ export default function RoadmapCompletionModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 16 }}
         transition={{ type: "spring", damping: 24, stiffness: 300 }}
-        className="fixed inset-0 z-[70] flex items-center justify-center px-4 pointer-events-none overflow-y-auto py-6"
+        className="fixed inset-0 z-[70] flex items-center justify-center px-4 pointer-events-none"
       >
-        <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto pointer-events-auto bg-white dark:bg-stone-900/95 border border-stone-200 dark:border-white/10 rounded-md shadow-2xl shadow-lime-500/10 overflow-hidden">
+        <div className="relative w-full max-w-md pointer-events-auto bg-stone-900/95 border border-white/10 rounded-2xl shadow-2xl shadow-lime-500/10 overflow-hidden">
 
           {/* Confetti burst */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -197,7 +178,7 @@ export default function RoadmapCompletionModal({
           </div>
 
           {/* Top gradient accent */}
-          <div className="absolute top-0 inset-x-0 h-px bg-linear-to-r from-transparent via-lime-400/60 to-transparent" />
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-lime-400/60 to-transparent" />
 
           {/* Close button */}
           <button
@@ -205,7 +186,7 @@ export default function RoadmapCompletionModal({
             type="button"
             onClick={onClose}
             aria-label="Close completion dialog"
-            className="absolute top-3 right-3 z-10 p-1.5 rounded-lg text-stone-900 dark:text-stone-500 hover:text-stone-300 hover:bg-white/5 transition-colors cursor-pointer border-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+            className="absolute top-3 right-3 z-10 p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-white/5 transition-colors cursor-pointer border-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -220,7 +201,7 @@ export default function RoadmapCompletionModal({
               className="relative inline-flex items-center justify-center mb-5"
             >
               <div className="absolute inset-0 rounded-full bg-lime-400/20 blur-xl scale-150" />
-              <div className="relative h-20 w-20 rounded-md bg-lime-400 flex items-center justify-center shadow-lg shadow-lime-500/40">
+              <div className="relative h-20 w-20 rounded-2xl bg-lime-400 flex items-center justify-center shadow-lg shadow-lime-500/40">
                 <Trophy className="w-9 h-9 text-stone-950" strokeWidth={2.5} />
               </div>
               {/* Sparkles */}
@@ -238,18 +219,18 @@ export default function RoadmapCompletionModal({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25, duration: 0.4 }}
             >
-              <p className="text-sm font-mono uppercase tracking-[0.28em] text-lime-400 mb-2">
+              <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-lime-400 mb-2">
                 roadmap complete
               </p>
               <h2
                 id="completion-title"
-                className="text-2xl font-bold text-stone-900 dark:text-stone-50 leading-tight mb-1"
+                className="text-2xl font-bold text-stone-50 leading-tight mb-1"
               >
                 You did it! 🎉
               </h2>
-              <p className="text-stone-400 dark:text-stone-500 text-sm leading-relaxed mt-2">
+              <p className="text-stone-400 text-sm leading-relaxed mt-2">
                 You've completed the{" "}
-                <span className="text-stone-900 dark:text-stone-200 font-semibold">{safeRoadmapName}</span>{" "}
+                <span className="text-stone-200 font-semibold">{roadmapName}</span>{" "}
                 roadmap. Share your achievement with the world!
               </p>
             </motion.div>
@@ -259,7 +240,7 @@ export default function RoadmapCompletionModal({
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
-              className="my-6 h-px bg-linear-to-r from-transparent via-white/10 to-transparent"
+              className="my-6 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
             />
 
             {/* Share buttons */}
@@ -269,40 +250,18 @@ export default function RoadmapCompletionModal({
               transition={{ delay: 0.45, duration: 0.35 }}
               className="space-y-3"
             >
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-stone-900 dark:text-stone-500 mb-4">
+              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-stone-500 mb-4">
                 share your achievement
               </p>
-
-              {/* Download Certificate */}
-              <button
-                id="download-certificate-btn"
-                type="button"
-                onClick={() => window.open(certificateUrl, "_blank")}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-md bg-lime-400 hover:bg-lime-300 text-stone-950 font-bold text-sm transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
-              >
-                <Trophy className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Download Certificate</span>
-              </button>
-
-              {/* LinkedIn Add to Profile */}
-              <button
-                id="linkedin-add-profile-btn"
-                type="button"
-                onClick={() => openShare(linkedInAddToProfileUrl)}
-                className="w-full flex items-center justify-center gap-3 px-4 py-2 text-sm rounded-md bg-[#0A66C2]/20 hover:bg-[#0A66C2]/35 border border-[#0A66C2]/30 hover:border-[#0A66C2]/60 text-[#70B5F9] font-semibold transition-all duration-200 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
-              >
-                <LinkedInIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Add Certificate to LinkedIn</span>
-              </button>
 
               {/* Twitter/X */}
               <button
                 id="share-twitter-btn"
                 type="button"
                 onClick={() => openShare(twitterShareUrl)}
-                className="w-full flex items-center justify-center gap-3 px-4 py-2 text-sm rounded-md bg-stone-800 hover:bg-stone-700 border border-white/8 hover:border-white/15 text-stone-900 dark:text-stone-50 font-semibold transition-all duration-200 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-white/8 hover:border-white/15 text-stone-50 font-semibold text-sm transition-all duration-200 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
               >
-                <XIcon className="w-4 h-4 text-stone-300 group-hover:text-stone-900 dark:text-stone-50 transition-colors shrink-0" aria-hidden="true" />
+                <XIcon className="w-4 h-4 text-stone-300 group-hover:text-stone-50 transition-colors shrink-0" aria-hidden="true" />
                 <span>Share on X (Twitter)</span>
               </button>
 
@@ -311,7 +270,7 @@ export default function RoadmapCompletionModal({
                 id="share-linkedin-btn"
                 type="button"
                 onClick={() => openShare(linkedInShareUrl)}
-                className="w-full flex items-center justify-center gap-3 px-4 py-2 text-sm rounded-md bg-[#0A66C2]/20 hover:bg-[#0A66C2]/35 border border-[#0A66C2]/30 hover:border-[#0A66C2]/60 text-[#70B5F9] font-semibold transition-all duration-200 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-[#0A66C2]/20 hover:bg-[#0A66C2]/35 border border-[#0A66C2]/30 hover:border-[#0A66C2]/60 text-[#70B5F9] font-semibold text-sm transition-all duration-200 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
               >
                 <LinkedInIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span>Share on LinkedIn</span>
@@ -323,7 +282,7 @@ export default function RoadmapCompletionModal({
                   id="share-native-btn"
                   type="button"
                   onClick={handleNativeShare}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-md bg-transparent hover:bg-white/5 border border-white/8 hover:border-white/15 text-stone-400 hover:text-stone-300 font-medium transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-transparent hover:bg-white/5 border border-white/8 hover:border-white/15 text-stone-400 hover:text-stone-300 font-medium text-sm transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
                 >
                   <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>More options</span>
@@ -342,7 +301,7 @@ export default function RoadmapCompletionModal({
                 id="completion-modal-dismiss"
                 type="button"
                 onClick={onClose}
-                className="text-stone-900 dark:text-stone-500 hover:text-stone-400 text-xs font-mono transition-colors cursor-pointer border-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400 rounded px-1"
+                className="text-stone-500 hover:text-stone-400 text-xs font-mono transition-colors cursor-pointer border-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400 rounded px-1"
               >
                 dismiss
               </button>

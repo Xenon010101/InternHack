@@ -27,9 +27,12 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { label: "Home", href: "/" },
-  { label: "Jobs", href: "/external-jobs" },
+  { label: "Jobs", href: "/jobs" },
   { label: "Learn", href: "/learn" },
   { label: "Companies", href: "/companies" },
+  { label: "Recruiters", href: "/for-recruiters" },
+  { label: "Blog", href: "/blog" },
+  { label: "About", href: "/about" },
 ];
 
 export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
@@ -55,8 +58,13 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
   };
 
   const dashboardLink =
-    user?.role === "ADMIN" ? "/admin" : "/student/applications";
-  const profileLink = "/student/profile";
+    user?.role === "ADMIN"
+      ? "/admin"
+      : user?.role === "RECRUITER"
+        ? "/recruiters"
+        : "/student/applications";
+  const profileLink =
+    user?.role === "RECRUITER" ? "/recruiters/profile" : "/student/profile";
 
   return (
     <motion.nav
@@ -90,10 +98,12 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
                 if (item.href === "/") {
                   return location.pathname === "/";
                 }
-                if (item.href === "/external-jobs") {
+                if (item.href === "/jobs") {
                   return (
                     location.pathname === "/jobs" ||
                     location.pathname.startsWith("/jobs/") ||
+                    location.pathname === "/student/jobs" ||
+                    location.pathname.startsWith("/student/jobs/") ||
                     location.pathname === "/internships" ||
                     location.pathname.startsWith("/internships/") ||
                     location.pathname === "/student/internships" ||
@@ -120,26 +130,25 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
                 );
               })();
               return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "no-underline group relative px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-300",
-                    active
-                      ? "text-stone-900 dark:text-stone-50"
-                      : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50",
-                  )}
-                >
-                  {item.label}
-                  <span
+                <Link key={item.href} to={item.href} aria-current={active ? "page" : undefined} className="no-underline">
+                  <button
                     className={cn(
-                      "absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-[2px] rounded-full bg-lime-400 transition-all duration-300 ease-out origin-center",
+                      "group relative px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-300 bg-transparent border-0 cursor-pointer",
                       active
-                        ? "w-full scale-x-100 opacity-100"
-                        : "w-full scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100",
+                        ? "text-stone-900 dark:text-stone-50"
+                        : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50",
                     )}
-                  />
+                  >
+                    {item.label}
+                    <span
+                      className={cn(
+                        "absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-[2px] rounded-full bg-lime-400 transition-all duration-300 ease-out origin-center",
+                        active
+                          ? "w-full scale-x-100 opacity-100"
+                          : "w-full scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100",
+                      )}
+                    />
+                  </button>
                 </Link>
               );
             })}
@@ -152,10 +161,10 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
               className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 dark:text-stone-400 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-colors"
             >
               {theme === "dark" ? (
-  <Sun className="w-4 h-4" />
-) : (
-  <Moon className="w-4 h-4" />
-)}
+                <Moon className="w-4 h-4" />
+              ) : (
+                <Sun className="w-4 h-4" />
+              )}
             </button>
 
             {isAuthenticated ? (
@@ -200,13 +209,17 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
                     </div>
                   </PopoverHeader>
                   <PopoverBody className="space-y-1 px-2 py-1.5">
-                    <Link to={dashboardLink} className="no-underline w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-300 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-colors">
-                      <LayoutDashboard className="w-4 h-4" />
-                      Dashboard
+                    <Link to={dashboardLink} className="no-underline">
+                      <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-300 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-colors text-left cursor-pointer bg-transparent border-0">
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard
+                      </button>
                     </Link>
-                    <Link to={profileLink} className="no-underline w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-300 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-colors">
-                      <Settings className="w-4 h-4" />
-                      Settings
+                    <Link to={profileLink} className="no-underline">
+                      <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-300 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-colors text-left cursor-pointer bg-transparent border-0">
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </button>
                     </Link>
                   </PopoverBody>
                   <PopoverFooter>
@@ -222,11 +235,15 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
               </Popover>
             ) : (
               <>
-                <Link to="/login" className="no-underline px-3 py-1.5 text-sm text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-50 transition-colors font-medium rounded-md">
-                  Sign In
+                <Link to="/login" className="no-underline">
+                  <button className="px-3 py-1.5 text-sm text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-50 transition-colors font-medium rounded-md bg-transparent border-0 cursor-pointer">
+                    Sign In
+                  </button>
                 </Link>
-                <Link to="/register" className="no-underline px-4 py-2 bg-lime-400 text-stone-950 text-sm font-bold rounded-md hover:bg-lime-300 transition-colors">
-                  Start free
+                <Link to="/register" className="no-underline">
+                  <button className="px-4 py-2 bg-lime-400 text-stone-950 text-sm font-bold rounded-md hover:bg-lime-300 transition-colors cursor-pointer border-0">
+                    Start free
+                  </button>
                 </Link>
               </>
             )}
@@ -243,9 +260,9 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
               className="p-2 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-50 rounded-md transition-colors"
             >
               {theme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
                 <Moon className="w-4 h-4" />
+              ) : (
+                <Sun className="w-4 h-4" />
               )}
             </button>
             {isAuthenticated && (
@@ -290,13 +307,17 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
                     </div>
                   </PopoverHeader>
                   <PopoverBody className="space-y-1 px-2 py-1.5">
-                    <Link to={dashboardLink} className="no-underline w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/5 rounded-md transition-colors">
-                      <LayoutDashboard className="w-4 h-4" />
-                      Dashboard
+                    <Link to={dashboardLink} className="no-underline">
+                      <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/5 rounded-md transition-colors text-left cursor-pointer bg-transparent border-0">
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard
+                      </button>
                     </Link>
-                    <Link to={profileLink} className="no-underline w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/5 rounded-md transition-colors">
-                      <Settings className="w-4 h-4" />
-                      Settings
+                    <Link to={profileLink} className="no-underline">
+                      <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/5 rounded-md transition-colors text-left cursor-pointer bg-transparent border-0">
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </button>
                     </Link>
                   </PopoverBody>
                   <PopoverFooter>
@@ -379,9 +400,11 @@ export function Navbar({ sidebarOffset = 0 }: { sidebarOffset?: number }) {
                       <Link
                         to="/register"
                         onClick={() => setIsOpen(false)}
-                        className="block no-underline w-full px-4 py-2.5 bg-lime-400 text-stone-950 text-sm font-bold rounded-md hover:bg-lime-300 transition-colors"
+                        className="block no-underline"
                       >
-                        Start free
+                        <button className="w-full px-4 py-2.5 bg-lime-400 text-stone-950 text-sm font-bold rounded-md hover:bg-lime-300 transition-colors border-0">
+                          Start free
+                        </button>
                       </Link>
                     </>
                   )}
@@ -408,7 +431,6 @@ function MobileNavLink({
     <Link
       to={href}
       onClick={onClick}
-      role="menuitem"
       className="block px-3 py-2 text-sm text-stone-700 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-300 dark:hover:text-stone-50 dark:hover:bg-white/5 rounded-md transition-all font-medium no-underline"
     >
       {children}

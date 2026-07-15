@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { GitCompare, Shuffle, Check, X, Boxes } from "lucide-react";
 import EngineeringLessonShell from "@/components/engineering/EngineeringLessonShell";
 import type { EngTabDef, EngQuizQuestion } from "@/components/engineering/EngineeringLessonShell";
-import { SafeHtml } from "@/components/common/SafeHtml";
 import {
   SD,
   MONO,
@@ -458,10 +457,7 @@ function Cheatsheet() {
               <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--eng-text)", marginBottom: 4, lineHeight: 1.35 }}>
                 {r.title}
               </div>
-              <SafeHtml 
-                style={{ fontSize: "0.85rem", color: "var(--eng-text-muted)", lineHeight: 1.55 }} 
-                html={r.body} 
-              />
+              <div style={{ fontSize: "0.85rem", color: "var(--eng-text-muted)", lineHeight: 1.55 }} dangerouslySetInnerHTML={{ __html: r.body }} />
             </div>
           </motion.div>
         ))}

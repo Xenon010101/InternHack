@@ -6,7 +6,6 @@ import {
   Info, ArrowUpRight, RotateCcw, Lightbulb, Eye, Code2,
 } from "lucide-react";
 import { CodeBlock } from "../../../components/ui/CodeBlock";
-import { GridBackground } from "../../../components/ui/GridBackground";
 import { sections, lessons } from "./data";
 import type { HtmlProgress, PracticeExercise } from "./data/types";
 import HtmlEditor from "./components/HtmlEditor";
@@ -15,8 +14,6 @@ import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
 import { reportMilestone } from "../../../lib/milestone.utils";
-import { Button } from "../../../components/ui/button";
-
 
 const FREE_LIMIT = 5;
 
@@ -32,7 +29,7 @@ function toggleProgress(lessonId: string): boolean {
   const progress = getLocalProgress();
   const current = progress[lessonId]?.completed ?? false;
   progress[lessonId] = { ...progress[lessonId], completed: !current };
-  try { localStorage.setItem("html-progress", JSON.stringify(progress)); } catch { console.warn("Failed to persist to localStorage: html-progress"); }
+  localStorage.setItem("html-progress", JSON.stringify(progress));
   return !current;
 }
 
@@ -230,8 +227,6 @@ export default function HtmlLessonDetailPage() {
     const p = getLocalProgress();
     return !!p[lessonId ?? ""]?.completed;
   });
-  const [playgroundCode, setPlaygroundCode] = useState("");
-  const [showPlayground, setShowPlayground] = useState(false);
 
   const section = sections.find((s) => s.id === sectionSlug);
   const sectionLessons = useMemo(
@@ -286,7 +281,14 @@ export default function HtmlLessonDetailPage() {
         canonicalUrl={canonicalUrl(`/learn/html/${sectionSlug}/${lessonId}`)}
       />
 
-      <GridBackground />
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none opacity-[0.04] dark:opacity-[0.05] z-0"
+        style={{
+          backgroundImage: "linear-gradient(to right, rgba(120,113,108,0.25) 1px, transparent 1px)",
+          backgroundSize: "120px 100%",
+        }}
+      />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8">
         {/* Editorial header */}
@@ -376,21 +378,7 @@ export default function HtmlLessonDetailPage() {
             </div>
             <div className="space-y-4">
               {content.codeExamples.map((example, i) => (
-                <CodeBlock
-                  key={i}
-                  example={example}
-                  language="html"
-                  onTryIt={(code) => {
-                    setPlaygroundCode(code);
-                    setShowPlayground(true);
-
-                    setTimeout(() => {
-                      document
-                         .getElementById("lesson-playground")
-                         ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }, 100);
-                  }}
-                />
+                <CodeBlock key={i} example={example} language="html" />
               ))}
             </div>
           </motion.div>
@@ -476,36 +464,7 @@ export default function HtmlLessonDetailPage() {
             </div>
           </motion.div>
         )}
-        {showPlayground && (
-          <div
-            id="lesson-playground"
-            className="mb-8 bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-md p-5"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">HTML Playground</h3>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPlayground(false)}
-              >
-                Close
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <HtmlEditor
-                value={playgroundCode}
-                onChange={setPlaygroundCode}
-              />
-
-              <LivePreview
-                html={playgroundCode}
-                height="250px"
-              />
-            </div>
-          </div>
-        )}
         {exercises.length > 0 && (
           <div className="mb-8">
             <ExerciseSection exercises={exercises} lessonId={lessonId!} />

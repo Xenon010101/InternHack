@@ -2,9 +2,8 @@ import { motion, AnimatePresence, useAnimation, useMotionValue, useReducedMotion
 import { Link } from "react-router";
 import { useEffect, useCallback, useState, useRef } from "react";
 import NumberFlow from "@number-flow/react";
-import { ArrowRight, Github, Play, Star } from "lucide-react";
+import { ArrowRight, Play, Star } from "lucide-react";
 import { useAuthStore } from "@/lib/auth.store";
-import { SOCIAL_LINKS } from "@/lib/social-links";
 
 const ROTATING_WORDS = ["offer.", "internship.", "interview.", "callback.", "dream job."];
 
@@ -44,7 +43,9 @@ function HeroGeometric() {
   const getStartedHref = isAuthenticated
     ? user?.role === "ADMIN"
       ? "/admin"
-      : "/student/applications"
+      : user?.role === "RECRUITER"
+        ? "/recruiters"
+        : "/student/applications"
     : "/register";
 
   const [wordIdx, setWordIdx] = useState(0);
@@ -78,19 +79,6 @@ function HeroGeometric() {
       />
 
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 pb-10 md:pt-40 md:pb-14 text-center">
-        <motion.a
-          href={SOCIAL_LINKS.github}
-          target="_blank"
-          rel="noopener noreferrer"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="no-underline inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-md border border-stone-300 dark:border-white/15 text-xs font-mono text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50 hover:border-lime-400 dark:hover:border-lime-400 transition-colors"
-        >
-          <Github className="w-3.5 h-3.5" />
-          Open source on GitHub
-          <ArrowRight className="w-3 h-3" />
-        </motion.a>
         <motion.h1
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -129,7 +117,7 @@ function HeroGeometric() {
           className="mt-8 text-base md:text-lg text-stone-600 dark:text-stone-400 max-w-2xl mx-auto leading-relaxed"
         >
           InternHack scores your resume, sharpens your DSA, runs mock
-          interviews, and sends your application straight to companies hiring.
+          interviews, and sends your application straight to recruiters hiring.
         </motion.p>
 
         <motion.div
@@ -170,6 +158,29 @@ function HeroGeometric() {
       </div>
 
       <WinsMarquee />
+
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-10 border-t border-stone-200 dark:border-white/10">
+        <div className="text-xs font-mono uppercase tracking-widest text-stone-500 mb-4 text-center">
+          Trusted by students at
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold text-stone-500 dark:text-stone-500">
+          <span>IITs</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>NITs</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>BITS Pilani</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>IIITs</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>VIT</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>SRM</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>Manipal</span>
+          <span className="text-stone-300 dark:text-stone-700">/</span>
+          <span>200+ colleges</span>
+        </div>
+      </div>
     </section>
   );
 }

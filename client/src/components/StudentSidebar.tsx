@@ -1,27 +1,6 @@
 import { useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router";
-import {
-  Briefcase,
-  FileText,
-  LogOut,
-  ScanSearch,
-  Building2,
-  ChevronsLeft,
-  ChevronsRight,
-  UserCircle,
-  Award,
-  Globe,
-  Crown,
-  ShieldCheck,
-  Video,
-  GraduationCap,
-  User,
-  Menu,
-  X,
-  Lock,
-  BrainCircuit,
-  Radar,
-} from "lucide-react";
+import { Briefcase, FileText, LogOut, ScanSearch, Building2, ChevronsLeft, ChevronsRight, UserCircle, Award, Globe, Crown, ShieldCheck, Video, GraduationCap, User, Menu, X, Lock, BrainCircuit, Radar } from "lucide-react";
 import { useAuthStore } from "../lib/auth.store";
 
 type NavItem = {
@@ -38,14 +17,14 @@ type NavGroup = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-  label: "work",
-  items: [
-    { to: "/student/jobs", icon: Briefcase, label: "Browse Jobs" },
-    { to: "/student/signals", icon: Radar, label: "Funding Signals" },
-    { to: "/student/applications", icon: FileText, label: "My Applications" },
-    { to: "/student/companies", icon: Building2, label: "Explore Companies" },
-  ],
-},
+    label: "work",
+    items: [
+      { to: "/student/jobs", icon: Briefcase, label: "Browse Jobs" },
+      { to: "/student/signals", icon: Radar, label: "Funding Signals" },
+      { to: "/student/applications", icon: FileText, label: "My Applications" },
+      { to: "/student/companies", icon: Building2, label: "Explore Companies" },
+    ],
+  },
   {
     label: "prep",
     items: [
@@ -53,13 +32,13 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/student/ats/score", icon: ScanSearch, label: "Resume" },
       { to: "/learn", icon: GraduationCap, label: "Learning Hub" },
       { to: "/student/skill-verification", icon: ShieldCheck, label: "Skill Tests" },
-      { to: "/student/mock-interview", icon: Video, label: "Mock Interview" },
+      { to: "/student/mock-interview", icon: Video, label: "Mock Interview", premium: true },
     ],
   },
   {
     label: "discover",
     items: [
-      { to: "/student/grants", icon: Award, label: "Startup Grants" },
+      { to: "/student/grants", icon: Award, label: "Grants" },
       { to: "/student/opensource", icon: Globe, label: "Open Source" },
     ],
   },
@@ -74,11 +53,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 export function useStudentSidebar() {
   const { user, logout } = useAuthStore();
-  const isPremium =
-    user?.subscriptionStatus === "ACTIVE" &&
-    user?.subscriptionPlan !== "FREE" &&
-    user?.subscriptionEndDate &&
-    new Date(user.subscriptionEndDate) > new Date();
+  const isPremium = user?.subscriptionStatus === "ACTIVE" && user.subscriptionPlan !== "FREE";
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("sidebar-collapsed") === "true";
@@ -187,17 +162,14 @@ export function useStudentSidebar() {
           >
             {avatar("md")}
             {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-bold text-stone-900 dark:text-stone-50 truncate leading-tight">
+              <>
+                <h2 className="text-sm font-bold text-stone-900 dark:text-stone-50 truncate leading-tight flex-1">
                   {user?.name}
                 </h2>
                 {isPremium && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-amber-500 dark:text-amber-400">
-                    <Crown className="w-2.5 h-2.5 shrink-0" fill="currentColor" />
-                    Premium
-                  </span>
+                  <span className="shrink-0 h-1.5 w-1.5 bg-lime-400" title="Premium" />
                 )}
-              </div>
+              </>
             )}
           </Link>
           {!collapsed && (

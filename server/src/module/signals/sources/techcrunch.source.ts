@@ -12,11 +12,10 @@ export class TechCrunchSource extends BaseSignalSource {
 
   private readonly feedUrl = "https://techcrunch.com/category/venture/feed/";
 
-  async fetch(signal?: AbortSignal): Promise<SourceResult> {
+  async fetch(): Promise<SourceResult> {
     try {
       const res = await fetch(this.feedUrl, {
         headers: { "User-Agent": "InternHack-Signals/1.0" },
-        signal,
       });
       if (!res.ok) {
         return {

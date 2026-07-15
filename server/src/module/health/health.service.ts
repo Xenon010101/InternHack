@@ -1,7 +1,8 @@
 import { prisma } from "../../database/db.js";
+import { redis } from "../../config/redis.js";
 import { shutdownManager } from "../../utils/graceful-shutdown.js";
 
-export type HealthStatus = "up" | "down";
+export type HealthStatus = "up" | "down" | "not_configured";
 
 export interface DependencyCheck {
   status: HealthStatus;
@@ -13,6 +14,7 @@ export interface ReadinessResult {
   status: "ready" | "not_ready";
   checks: {
     database: DependencyCheck;
+    redis: DependencyCheck;
     shutdownInProgress: boolean;
   };
 }
@@ -28,6 +30,7 @@ export interface FullHealthResult {
   };
   checks: {
     database: DependencyCheck;
+    redis: DependencyCheck;
   };
 }
 
@@ -38,6 +41,28 @@ export async function checkDatabase(): Promise<DependencyCheck> {
   const start = Date.now();
   try {
     await prisma.$queryRawUnsafe("SELECT 1");
+    return { status: "up", latencyMs: Date.now() - start };
+  } catch (err) {
+    return {
+      status: "down",
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Check Redis connectivity by sending a PING.
+ * Returns "not_configured" when REDIS_URL is not set.
+ */
+export async function checkRedis(): Promise<DependencyCheck> {
+  if (!redis) {
+    return { status: "not_configured" };
+  }
+
+  const start = Date.now();
+  try {
+    await redis.ping();
     return { status: "up", latencyMs: Date.now() - start };
   } catch (err) {
     return {
@@ -67,7 +92,10 @@ export function getMemoryUsage(): FullHealthResult["memory"] {
  */
 export async function getReadiness(): Promise<ReadinessResult> {
   const isShutdown = shutdownManager.isShutdown();
-  const database = await checkDatabase();
+  const [database, redisCheck] = await Promise.all([
+    checkDatabase(),
+    checkRedis(),
+  ]);
 
   const isReady = !isShutdown && database.status === "up";
 
@@ -75,6 +103,7 @@ export async function getReadiness(): Promise<ReadinessResult> {
     status: isReady ? "ready" : "not_ready",
     checks: {
       database,
+      redis: redisCheck,
       shutdownInProgress: isShutdown,
     },
   };
@@ -84,15 +113,22 @@ export async function getReadiness(): Promise<ReadinessResult> {
  * Full health status — includes memory, uptime, and all dependency checks.
  */
 export async function getFullHealth(): Promise<FullHealthResult> {
-  const database = await checkDatabase();
+  const [database, redisCheck] = await Promise.all([
+    checkDatabase(),
+    checkRedis(),
+  ]);
+
+  const allUp = database.status === "up" &&
+    (redisCheck.status === "up" || redisCheck.status === "not_configured");
 
   return {
-    status: database.status === "up" ? "ok" : "degraded",
+    status: allUp ? "ok" : "degraded",
     version: process.env["npm_package_version"] ?? "0.0.0",
     uptime: Math.floor(process.uptime()),
     memory: getMemoryUsage(),
     checks: {
       database,
+      redis: redisCheck,
     },
   };
 }

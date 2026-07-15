@@ -22,7 +22,7 @@ import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
 import { reportMilestone } from "../../../lib/milestone.utils";
-import { DIFF_COLOR } from "../../../lib/difficulty-styles";
+import { DIFF_COLOR } from "../../../lib/difficulty-colors";
 
 const FREE_LIMIT = 5;
 

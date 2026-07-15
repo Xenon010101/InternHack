@@ -113,9 +113,6 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
     };
   }, [open, onClose]);
 
-  const [remaining, setRemaining] = useState<number>(5);
-  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
-
   const mutation = useMutation({
     mutationFn: async (data: SuggestRepoForm) => {
       const payload = {
@@ -131,11 +128,7 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
       };
       return api.post("/opensource/requests", payload);
     },
-    onSuccess: (response) => {
-      const rem = response.headers["x-ratelimit-remaining"];
-      if (rem !== undefined) {
-        setRemaining(parseInt(rem, 10));
-      }
+    onSuccess: () => {
       setSuccess(true);
       queryClient.invalidateQueries({
         queryKey: queryKeys.opensource.myRequests(),
@@ -144,36 +137,18 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
         setSuccess(false);
         setForm(INITIAL_FORM);
         onClose();
-        setTimeout(() => setRemaining(5), 300);
-      }, 2500);
-    },
-    onError: (error: unknown) => {
-      const axiosError = error as { response?: { status?: number; headers?: Record<string, string | undefined> } };
-      if (axiosError?.response?.status === 429) {
-        const resetHeader = axiosError.response?.headers?.["x-ratelimit-reset"];
-        if (resetHeader) {
-          const resetMs = new Date(resetHeader).getTime() - Date.now();
-          const hoursLeft = Math.ceil(resetMs / (1000 * 60 * 60));
-          setRateLimitError(`You've reached your daily limit. Resets in ${hoursLeft} hour${hoursLeft !== 1 ? "s" : ""}.`);
-          setRemaining(0);
-        } else {
-          setRateLimitError("You've reached your daily limit. Please try again tomorrow.");
-          setRemaining(0);
-        }
-      } else {
-        setRateLimitError(null);
-      }
+      }, 2000);
     },
   });
 
   const set =
     (key: keyof SuggestRepoForm) =>
-      (
-        e: React.ChangeEvent<
-          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-        >,
-      ) =>
-        setForm((f) => ({ ...f, [key]: e.target.value }));
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -231,17 +206,10 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
         className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-4 rounded-t-2xl flex items-start justify-between z-10">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-              Suggest a Repository
-            </h2>
-            {typeof remaining === 'number' && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Suggestions remaining today: <span className="font-semibold text-lime-600 dark:text-lime-400">{remaining}/5</span>
-              </p>
-            )}
-          </div>
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-4 rounded-t-2xl flex items-center justify-between z-10">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            Suggest a Repository
+          </h2>
           <Button
             variant="ghost"
             mode="icon"
@@ -261,14 +229,9 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
               Request Submitted!
             </h3>
-            <p className="text-sm text-gray-500 mb-2">
+            <p className="text-sm text-gray-500">
               You'll receive an email once it's reviewed.
             </p>
-            {remaining !== null && (
-              <p className="text-xs font-medium inline-block px-3 py-1 rounded-md bg-stone-100 dark:bg-white/5 text-stone-700 dark:text-stone-300">
-                {remaining} of 5 suggestions remaining today
-              </p>
-            )}
           </div>
         ) : (
           <form className="px-6 py-5 space-y-4" onSubmit={handleSubmit}>
@@ -313,13 +276,9 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
                 aria-invalid={!!urlError}
                 aria-describedby={urlError ? "suggest-url-error" : undefined}
               />
-              {urlError ? (
+              {urlError && (
                 <p id="suggest-url-error" className="mt-1 text-xs text-red-500">
                   {urlError}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-gray-400">
-                  Format: https://github.com/owner/repo — we'll auto-fill the rest
                 </p>
               )}
             </div>
@@ -468,11 +427,12 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
               </div>
             </div>
 
-            {(mutation.isError || rateLimitError) && (
+            {mutation.isError && (
               <p className="text-sm text-red-500">
-                {rateLimitError ??
-                  ((mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-                    "Failed to submit. Please try again.")}
+                {(mutation.error as { response?: { status?: number; data?: { message?: string } } })?.response?.status === 429
+                  ? (mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message
+                  : (mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                    "Failed to submit. Please try again."}
               </p>
             )}
 
@@ -480,7 +440,7 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
               type="submit"
               variant="mono"
               size="lg"
-              disabled={mutation.isPending || !parsedRepo || remaining === 0}
+              disabled={mutation.isPending || !parsedRepo}
               className="w-full rounded-xl"
             >
               {mutation.isPending ? (
@@ -492,11 +452,6 @@ export function SuggestRepoModal({ open, onClose }: SuggestRepoModalProps) {
                 "Submit Request"
               )}
             </Button>
-            {remaining === 0 && (
-              <p className="text-center text-xs font-medium text-stone-500 dark:text-stone-400">
-                Daily limit reached. Come back tomorrow.
-              </p>
-            )}
           </form>
         )}
       </motion.div>

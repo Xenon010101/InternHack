@@ -3,26 +3,26 @@ import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-quer
 import { Link } from "react-router";
 import { motion } from "framer-motion";
 import {
-CheckCircle2, Building2, Bookmark, ArrowRight,
-  Lock, Search, BookOpen, TrendingUp, Target, X,
+CheckCircle2, Building2, Puzzle, Bookmark, ArrowRight,
+  Lock, Search, BookOpen, TrendingUp, Target, Download, X,
 } from "lucide-react";
 import { PaginationControls } from "../../../components/ui/PaginationControls";
 import { Button } from "../../../components/ui/button";
 import api from "../../../lib/axios";
 import { queryKeys } from "../../../lib/query-keys";
-import type { DsaTopicsResponse, DsaProgress, DsaTopic, User } from "../../../lib/types";
+import type { DsaTopicsResponse, DsaProgress, LeetcodeImportStatus, DsaTopic, User } from "../../../lib/types";
 import { useAuthStore } from "../../../lib/auth.store";
 import { SEO } from "../../../components/SEO";
-import { canonicalUrl,SITE_URL } from "../../../lib/seo.utils";
-import { courseSchema, breadcrumbSchema, faqSchema } from "../../../lib/structured-data";
+import { canonicalUrl } from "../../../lib/seo.utils";
 import { LoadingScreen } from "../../../components/LoadingScreen";
 import { LoginGate } from "../../../components/LoginGate";
 import { LeetCodeSync } from "./components/LeetCodeSync";
+import { LeetcodeImportModal } from "./components/LeetcodeImportModal";
 import { DsaHeatmap } from "./components/DsaHeatmap";
 import { ResultCount } from "../../../components/ui/ResultCount";
-import { FilterChip } from "../../../components/ui/FilterChip";
 
 const TOPICS_PER_PAGE = 20;
+const IMPORT_ENABLED = import.meta.env["VITE_LEETCODE_IMPORT_ENABLED"] !== "false";
 
 type DifficultyTab = "all" | "easy" | "medium-hard";
 
@@ -188,6 +188,7 @@ export default function DsaTopicsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<DifficultyTab>("all");
   const [showGate, setShowGate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(1);
   const [topicSearch, setTopicSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -233,6 +234,14 @@ const clearFilters = () => {
     enabled: !!user,
     staleTime: 15 * 24 * 60 * 60 * 1000,
   });
+
+  const { data: importStatus } = useQuery({
+    queryKey: queryKeys.dsa.importStatus(),
+    queryFn: () => api.get<LeetcodeImportStatus>("/dsa/import/status").then((r) => r.data),
+    enabled: !!user && IMPORT_ENABLED,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const totalProblems = uniqueProblems;
   const rawSolved = topics?.reduce((s, t) => s + t.solvedCount, 0) ?? 0;
   const totalSolved = Math.max(0, Math.min(rawSolved, totalProblems));
@@ -253,9 +262,8 @@ const clearFilters = () => {
 
   const quickLinks = [
     { to: "/learn/dsa/companies", icon: Building2, label: "companies" },
-    ...(user
-      ? [{ to: "/learn/dsa/bookmarks", icon: Bookmark, label: "bookmarks" }]
-      : []),
+    { to: "/learn/dsa/patterns", icon: Puzzle, label: "patterns" },
+    ...(user ? [{ to: "/learn/dsa/bookmarks", icon: Bookmark, label: "bookmarks" }] : []),
   ];
 
   return (
@@ -265,23 +273,6 @@ const clearFilters = () => {
         description="Practice data structures and algorithms problems organized by topic. Track your progress across arrays, trees, graphs, dynamic programming, and more."
         keywords="DSA practice, data structures, algorithms, leetcode, coding interview, arrays, trees, graphs, dynamic programming"
         canonicalUrl={canonicalUrl("/learn/dsa")}
-        structuredData={[
-          courseSchema({
-            name: "DSA Practice — Data Structures & Algorithms | InternHack",
-            description: "Practice data structures and algorithms problems organized by topic. Track your progress across arrays, trees, graphs, dynamic programming, and more.",
-            url: `${SITE_URL}/learn/dsa`,
-          }),
-          breadcrumbSchema([
-            { name: "Home", url: SITE_URL },
-            { name: "Learn", url: `${SITE_URL}/learn` },
-            { name: "DSA", url: `${SITE_URL}/learn/dsa` },
-          ]),
-          faqSchema([
-            { question: "Is this DSA course free?", answer: "Yes, the Data Structures and Algorithms course on InternHack is completely free with no sign-up required." },
-            { question: "What will I learn in this DSA course?", answer: "You will learn arrays, stacks, queues, trees, graphs, sorting algorithms, dynamic programming, and problem-solving patterns." },
-            { question: "Why is DSA important for interviews?", answer: "DSA is essential for coding interviews at top tech companies as it tests your problem-solving and algorithmic thinking skills." },
-          ]),
-        ]}
       />
 
       <div className="max-w-6xl mx-auto px-3 sm:px-8 py-8">
@@ -316,6 +307,16 @@ const clearFilters = () => {
                 <span className="h-1 w-1 bg-stone-300 dark:bg-stone-700" />
                 <span className="text-lime-600 dark:text-lime-400 tabular-nums">{overallPct}% complete</span>
               </div>
+              {user && IMPORT_ENABLED && (
+                <button
+                  id="lc-import-open-btn"
+                  onClick={() => setShowImport(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-400 hover:border-lime-400 dark:hover:border-lime-500 hover:text-lime-600 dark:hover:text-lime-400 transition-colors bg-white dark:bg-stone-900"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Import from LeetCode
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -350,6 +351,30 @@ const clearFilters = () => {
             </div>
           ))}
         </motion.div>
+
+        {/* "Already imported" banner */}
+        {user && IMPORT_ENABLED && importStatus?.lastImport && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between gap-3 px-4 py-2.5 mb-4 rounded-md bg-lime-50 dark:bg-lime-950/20 border border-lime-200 dark:border-lime-800"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-lime-600 dark:text-lime-400 shrink-0" />
+              <span className="text-[11px] text-stone-700 dark:text-stone-300">
+                Imported{importStatus.lastImport.username ? ` from @${importStatus.lastImport.username}` : " via CSV"} on{" "}
+                {new Date(importStatus.lastImport.importedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                {" "}· {importStatus.lastImport.imported} problems
+              </span>
+            </div>
+            <button
+              onClick={() => setShowImport(true)}
+              className="text-[10px] font-mono uppercase tracking-widest text-lime-700 dark:text-lime-400 hover:underline shrink-0 cursor-pointer"
+            >
+              re-import
+            </button>
+          </motion.div>
+        )}
 
         {/* Difficulty breakdown (logged-in) */}
         {user && progress && (
@@ -397,13 +422,12 @@ const clearFilters = () => {
           </motion.div>
         )}
 
-        {/* Practice history heatmap (logged-in) */}
+        {/* Heatmap (logged-in) */}
         {user && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.09 }}
-            className="mb-8"
           >
             <DsaHeatmap />
           </motion.div>
@@ -433,8 +457,8 @@ const clearFilters = () => {
           ))}
         </motion.div>
 
-        {/* LeetCode Sync — only when the profile already has a LeetCode URL, never asks inline */}
-        {user?.leetcodeUrl && (
+        {/* LeetCode Sync — only for logged-in students */}
+        {user && (
           <LeetCodeSync
             onSyncSuccess={() => {
               queryClient.invalidateQueries({ queryKey: queryKeys.dsa.topics("") });
@@ -465,14 +489,21 @@ const clearFilters = () => {
             <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 mr-1">
               difficulty /
             </span>
-            {tabs.map((tab) => (
-              <FilterChip
-                key={tab.key}
-                label={tab.label}
-                active={activeTab === tab.key}
-                onClick={() => { setActiveTab(tab.key); setPage(1); }}
-              />
-            ))}
+            {tabs.map((tab) => {
+              const active = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => { setActiveTab(tab.key); setPage(1); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${active
+                    ? "bg-stone-900 dark:bg-stone-50 text-stone-50 dark:text-stone-900 border-stone-900 dark:border-stone-50"
+                    : "bg-transparent text-stone-600 dark:text-stone-400 border-stone-300 dark:border-white/10 hover:border-stone-500 dark:hover:border-white/30 hover:text-stone-900 dark:hover:text-stone-50"
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
 {hasFilters && (
               <Button onClick={clearFilters} variant="ghost" size="sm">
                 <X className="w-3 h-3" /> clear
@@ -523,6 +554,7 @@ const clearFilters = () => {
       </div>
 
       <LoginGate open={showGate} onClose={() => setShowGate(false)} />
+      <LeetcodeImportModal open={showImport} onClose={() => setShowImport(false)} />
     </div>
   );
 }

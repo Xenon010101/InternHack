@@ -127,20 +127,33 @@ const PasswordStrengthIndicator = React.memo(function PasswordStrengthIndicator(
   );
 });
 
+const PERSONAL_EMAIL_DOMAINS = [
+  "gmail.com", "yahoo.com", "yahoo.in", "hotmail.com", "outlook.com",
+  "live.com", "aol.com", "icloud.com", "mail.com", "protonmail.com",
+  "zoho.com", "yandex.com", "gmx.com", "rediffmail.com",
+];
+
+function isPersonalEmail(email: string) {
+  const domain = email.split("@")[1]?.toLowerCase();
+  return domain ? PERSONAL_EMAIL_DOMAINS.includes(domain) : false;
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const rawReturnTo = searchParams.get("from");
   const returnTo = rawReturnTo && /^\/(?!\/)/.test(rawReturnTo) ? rawReturnTo : null;
+  const initialRole = searchParams.get("role") === "RECRUITER" ? "RECRUITER" : "STUDENT";
+  const [role, setRole] = useState<"STUDENT" | "RECRUITER">(initialRole);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
+    company: "",
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -153,9 +166,12 @@ export default function RegisterPage() {
     return "";
   };
 
-  const validateEmail = (email: string): string => {
+  const validateEmail = (email: string, userRole: string): string => {
     if (!email.trim()) return "Email is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Invalid email address";
+    if (userRole === "RECRUITER" && isPersonalEmail(email)) {
+      return "Please use your company email. Personal email addresses (Gmail, Yahoo, etc.) are not allowed for recruiter accounts.";
+    }
     return "";
   };
 
@@ -188,7 +204,7 @@ export default function RegisterPage() {
         delete newErrors.name;
       }
     } else if (field === "email") {
-      const emailError = validateEmail(value);
+      const emailError = validateEmail(value, role);
       if (emailError) {
         newErrors.email = emailError;
       } else {
@@ -201,14 +217,6 @@ export default function RegisterPage() {
       } else {
         delete newErrors.password;
       }
-      if (form.confirmPassword) {
-        const confirmPasswordError = validateConfirmPassword(value, form.confirmPassword);
-        if (confirmPasswordError) {
-          newErrors.confirmPassword = confirmPasswordError;
-        } else {
-          delete newErrors.confirmPassword;
-        }
-      }
     } else if (field === "confirmPassword") {
       const confirmPasswordError = validateConfirmPassword(form.password, value);
       if (confirmPasswordError) {
@@ -220,17 +228,23 @@ export default function RegisterPage() {
     setFieldErrors(newErrors);
   };
 
-  const redirectAfterAuth = () => {
-    navigate(returnTo ?? "/student/applications");
+  const redirectAfterAuth = (userRole: string) => {
+    if (returnTo) {
+      navigate(returnTo);
+    } else if (userRole === "RECRUITER") {
+      navigate("/recruiters");
+    } else {
+      navigate("/student/applications");
+    }
   };
 
   const handleGoogleSuccess = async (accessToken: string) => {
     setError("");
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/google", { accessToken });
+      const { data } = await api.post("/auth/google", { accessToken, role });
       login(data.user);
-      redirectAfterAuth();
+      redirectAfterAuth(data.user.role);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       setError(error.response?.data?.message || "Google sign-up failed");
@@ -247,7 +261,7 @@ export default function RegisterPage() {
     // Validate all fields
     const newErrors: Record<string, string> = {};
     const nameError = validateName(form.name);
-    const emailError = validateEmail(form.email);
+    const emailError = validateEmail(form.email, role);
     const passwordError = validatePassword(form.password);
     const confirmPasswordError = validateConfirmPassword(form.password, form.confirmPassword);
 
@@ -255,7 +269,7 @@ export default function RegisterPage() {
     if (emailError) newErrors.email = emailError;
     if (passwordError) newErrors.password = passwordError;
     if (confirmPasswordError) newErrors.confirmPassword = confirmPasswordError;
-
+    
     if (Object.keys(newErrors).length > 0) {
       setFieldErrors(newErrors);
       return;
@@ -264,13 +278,14 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const payload: Record<string, string> = { name: form.name, email: form.email, password: form.password };
+      const payload: Record<string, string> = { name: form.name, email: form.email, password: form.password, role };
+      if (role === "RECRUITER" && form.company) payload.company = form.company;
       const { data } = await api.post("/auth/register", payload);
       if (!data.user.isVerified) {
         navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
       } else {
         login(data.user);
-        redirectAfterAuth();
+        redirectAfterAuth(data.user.role);
       }
     }  catch (err: unknown) {
       const error = err as {
@@ -306,15 +321,19 @@ export default function RegisterPage() {
     }
   };
 
+  const isRecruiter = role === "RECRUITER";
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-50">
       <SEO
         title="Create Account"
-        description="Join InternHack for free. Create an account to access AI-powered career tools, job listings, and career roadmaps."
+        description="Join InternHack for free. Create a student or recruiter account to access AI-powered career tools, job listings, and career roadmaps."
         noIndex
       />
 
-      <AuthPromoPanel />
+      <AuthPromoPanel
+        isRecruiter={isRecruiter}
+      />
 
       <div className="flex items-center justify-center px-6 py-12 lg:py-0">
 
@@ -342,12 +361,45 @@ export default function RegisterPage() {
               </div>
             )}
 
+            <div>
+              <label className="block text-xs font-mono uppercase tracking-widest text-stone-500 mb-1.5">
+                I am a
+              </label>
+              <div className="grid grid-cols-2 gap-0 border border-stone-300 dark:border-white/10 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setRole("STUDENT")}
+                  className={`py-2.5 text-sm font-bold transition-colors border-0 cursor-pointer ${role === "STUDENT"
+                    ? "bg-lime-400 text-stone-950"
+                    : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50"
+                    }`}
+                >
+                  Student
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole("RECRUITER")}
+                  className={`py-2.5 text-sm font-bold transition-colors border-0 cursor-pointer border-l border-stone-300 dark:border-white/10 ${role === "RECRUITER"
+                    ? "bg-lime-400 text-stone-950"
+                    : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-50"
+                    }`}
+                >
+                  Recruiter
+                </button>
+              </div>
+            </div>
+
             <GoogleAuthButton
-              label="Continue with Google"
+              label={isRecruiter ? "Sign up with Google Workspace" : "Continue with Google"}
               onAccessToken={handleGoogleSuccess}
               onError={() => setError("Google sign-up failed")}
               disabled={loading}
             />
+            {isRecruiter && (
+              <p className="text-xs font-mono text-amber-600 dark:text-amber-400">
+                only company google workspace accounts are accepted.
+              </p>
+            )}
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -377,7 +429,7 @@ export default function RegisterPage() {
                 />
               </FormField>
 
-              <FormField label="Email" error={fieldErrors.email} fieldName="email">
+              <FormField label={isRecruiter ? "Company email" : "Email"} error={fieldErrors.email} fieldName="email">
                 <input
                   type="email"
                   value={form.email}
@@ -389,9 +441,26 @@ export default function RegisterPage() {
                       ? "border-red-300 dark:border-red-800 focus:border-red-400"
                       : "border-stone-300 dark:border-white/10 focus:border-lime-400"
                   }`}
-                  placeholder="you@example.com"
+                  placeholder={isRecruiter ? "you@company.com" : "you@example.com"}
                 />
+                {!fieldErrors.email && isRecruiter && (
+                  <p className="mt-1.5 text-xs font-mono text-amber-600 dark:text-amber-400">
+                    no personal gmail, yahoo, or outlook.
+                  </p>
+                )}
               </FormField>
+
+              {isRecruiter && (
+                <FormField label="Company" fieldName="company">
+                  <input
+                    type="text"
+                    value={form.company}
+                    onChange={(e) => setForm({ ...form, company: e.target.value })}
+                    className="w-full px-4 py-3 border border-stone-300 dark:border-white/10 rounded-md focus:outline-none focus:border-lime-400 transition-colors bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600 text-sm"
+                    placeholder="Your company name"
+                  />
+                </FormField>
+              )}
 
               <FormField label="Password" error={fieldErrors.password} fieldName="password">
                 <div className="relative">
@@ -413,8 +482,7 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    title={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-900 dark:hover:text-stone-50 bg-transparent border-0 cursor-pointer z-10"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-900 dark:hover:text-stone-50 bg-transparent border-0 cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -429,30 +497,19 @@ export default function RegisterPage() {
               </FormField>
 
               <FormField label="Confirm Password" error={fieldErrors.confirmPassword} fieldName="confirmPassword">
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={form.confirmPassword}
-                    onChange={(e) => handleFieldChange("confirmPassword", e.target.value)}
-                    aria-invalid={!!fieldErrors.confirmPassword}
-                    aria-describedby={fieldErrors.confirmPassword ? "error-confirmPassword" : undefined}
-                    className={`w-full px-4 py-3 border rounded-md focus:outline-none transition-colors pr-10 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600 text-sm ${
-                      fieldErrors.confirmPassword
-                        ? "border-red-300 dark:border-red-800 focus:border-red-400"
-                        : "border-stone-300 dark:border-white/10 focus:border-lime-400"
-                    }`}
-                    placeholder="Confirm your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                    title={showConfirmPassword ? "Hide password" : "Show password"}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-900 dark:hover:text-stone-50 bg-transparent border-0 cursor-pointer z-10"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={form.confirmPassword}
+                  onChange={(e) => handleFieldChange("confirmPassword", e.target.value)}
+                  aria-invalid={!!fieldErrors.confirmPassword}
+                  aria-describedby={fieldErrors.confirmPassword ? "error-confirmPassword" : undefined}
+                  className={`w-full px-4 py-3 border rounded-md focus:outline-none transition-colors bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600 text-sm ${
+                    fieldErrors.confirmPassword
+                      ? "border-red-300 dark:border-red-800 focus:border-red-400"
+                      : "border-stone-300 dark:border-white/10 focus:border-lime-400"
+                  }`}
+                  placeholder="Confirm your password"
+                />
               </FormField>
 
               <button
@@ -517,12 +574,18 @@ function FormField({
   );
 }
 
-function AuthPromoPanel() {
-  const stats = [
+function AuthPromoPanel({ isRecruiter }: { isRecruiter: boolean }) {
+  const studentStats = [
     { value: "300", suffix: "+", label: "interview q's" },
     { value: "11", suffix: "", label: "coding tracks" },
     { value: "14", suffix: "", label: "resume templates" },
   ];
+  const recruiterStats = [
+    { value: "7", suffix: "d", label: "free trial" },
+    { value: "14", suffix: "/14", label: "hr modules" },
+    { value: "10", suffix: "m", label: "to first post" },
+  ];
+  const stats = isRecruiter ? recruiterStats : studentStats;
 
   return (
     <div className="hidden lg:flex relative flex-col justify-between px-12 xl:px-16 pt-8 pb-12 xl:pb-16 bg-stone-900 overflow-hidden">
@@ -540,6 +603,7 @@ function AuthPromoPanel() {
       </div>
       <div className="relative max-w-lg">
         <motion.div
+          key={isRecruiter ? "r" : "s"}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4 }}
@@ -550,19 +614,31 @@ function AuthPromoPanel() {
             transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             className="h-1.5 w-1.5 bg-lime-400"
           />
-          for students / new grads
+          {isRecruiter ? "start hiring in 10 minutes" : "for students / new grads"}
         </motion.div>
         <motion.h2
+          key={isRecruiter ? "rh" : "sh"}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           className="mt-6 text-4xl xl:text-5xl font-bold tracking-tight text-stone-50 leading-none"
         >
-          Build the resume.{" "}
-          <span className="text-stone-500">Land the offer.</span>
+          {isRecruiter ? (
+            <>
+              Your first hire.{" "}
+              <span className="text-stone-500">Live by tomorrow.</span>
+            </>
+          ) : (
+            <>
+              Build the resume.{" "}
+              <span className="text-stone-500">Land the offer.</span>
+            </>
+          )}
         </motion.h2>
         <p className="mt-6 text-base text-stone-400 leading-relaxed">
-          AI ATS scorer, LaTeX builder, 11 coding tracks, and 300+ interview questions. All free for students.
+          {isRecruiter
+            ? "Spin up a recruiter workspace, post a role, and see ranked candidates inside the day. Seven days on the house, no card required."
+            : "AI ATS scorer, LaTeX builder, 11 coding tracks, 300+ interview questions, and a direct line to recruiters. All free for students."}
         </p>
 
         <div className="mt-12 grid grid-cols-3 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
@@ -580,7 +656,9 @@ function AuthPromoPanel() {
         </div>
 
         <div className="mt-8 relative text-xs font-mono text-stone-500">
-          free for students. always.
+          {isRecruiter
+            ? "no card required. cancel any time."
+            : "free for students. always."}
         </div>
       </div>
     </div>

@@ -194,7 +194,6 @@ export default function LatexChatPanel({ code, onApplyCode, onClose }: LatexChat
           <Button
             variant="ghost"
             mode="icon"
-            aria-label="Close"
             size="sm"
             onClick={onClose}
           >
@@ -396,7 +395,6 @@ export default function LatexChatPanel({ code, onApplyCode, onClose }: LatexChat
           <Button
             variant="primary"
             mode="icon"
-            aria-label="Send"
             size="md"
             onClick={handleSend}
             disabled={!input.trim() || loading}

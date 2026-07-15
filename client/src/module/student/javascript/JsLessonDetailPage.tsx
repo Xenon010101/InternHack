@@ -15,7 +15,6 @@ import {
   Code2,
 } from "lucide-react";
 import { CodeBlock } from "../../../components/ui/CodeBlock";
-import LessonCodeRunner from "../../../components/LessonCodeRunner";
 import { sections, lessons } from "./data";
 import type { JsProgress, PracticeExercise } from "./data/types";
 import { jsEngine } from "./lib/js-engine";
@@ -26,8 +25,7 @@ import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
 import { reportMilestone } from "../../../lib/milestone.utils";
-import { DIFF_COLOR } from "../../../lib/difficulty-styles";
-import { Button } from "../../../components/ui/button";
+import { DIFF_COLOR } from "../../../lib/difficulty-colors";
 
 const FREE_LIMIT = 5;
 
@@ -43,7 +41,7 @@ function toggleProgress(lessonId: string): boolean {
   const progress = getLocalProgress();
   const current = progress[lessonId]?.completed ?? false;
   progress[lessonId] = { ...progress[lessonId], completed: !current };
-  try { localStorage.setItem("js-progress", JSON.stringify(progress)); } catch { console.warn("Failed to persist to localStorage: js-progress"); }
+  localStorage.setItem("js-progress", JSON.stringify(progress));
   return !current;
 }
 
@@ -269,10 +267,6 @@ export default function JsLessonDetailPage() {
     return !!p[lessonId ?? ""]?.completed;
   });
 
-  const [playgroundCode, setPlaygroundCode] = useState("");
-  const [showPlayground, setShowPlayground] = useState(false);
-  const [playgroundResult, setPlaygroundResult] = useState<JsRunResult | null>(null);
-
   const section = sections.find((s) => s.id === sectionSlug);
   const sectionIndex = sections.findIndex((s) => s.id === sectionSlug);
   const sectionLessons = useMemo(
@@ -454,34 +448,7 @@ export default function JsLessonDetailPage() {
             </div>
             <div className="space-y-3">
               {content.codeExamples.map((example, i) => (
-                <div 
-                  key={`${lesson.id}-${example.title || i}`}
-                  className="space-y-3"
-                >
-                <CodeBlock
-                  example={example}
-                  language="javascript"
-                  onTryIt={(code) => {
-                   setPlaygroundCode(code);
-                   setPlaygroundResult(null);
-                   setShowPlayground(true);
-
-                   setTimeout(() => {
-                    document
-                      .getElementById("lesson-playground")
-                      ?.scrollIntoView({
-                       behavior: "smooth",
-                       block: "start",
-                      });
-                   }, 100);
-                  }}
-                />
-
-                <LessonCodeRunner
-                  initialCode={example.code}
-                  language="javascript"
-                />
-            </div>
+                <CodeBlock key={`${lesson.id}-${example.title || i}`} example={example} language="javascript" />
               ))}
             </div>
           </motion.div>
@@ -570,43 +537,6 @@ export default function JsLessonDetailPage() {
             </motion.div>
           )}
 
-          {showPlayground && (
-            <div
-              id="lesson-playground"
-              className="mb-8 bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-md p-5"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">JavaScript Playground</h3>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPlayground(false)}
-                >
-                  Close
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                <JsEditor
-                  value={playgroundCode}
-                  onChange={setPlaygroundCode}
-                  onRun={async () => {
-                    const result = await jsEngine.execute(playgroundCode);
-                    setPlaygroundResult(result);
-                  }}
-                />
-
-                {playgroundResult && (
-                  <JsConsoleOutput
-                    result={playgroundResult}
-                    expectedOutput=""
-                    isCorrect={null}
-                  />
-                )}
-              </div>
-            </div>
-          )}
           {/* Practice exercises */}
           {exercises.length > 0 && (
             <>

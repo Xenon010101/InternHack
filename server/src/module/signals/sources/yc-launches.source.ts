@@ -12,11 +12,10 @@ export class YcLaunchesSource extends BaseSignalSource {
 
   private readonly feedUrl = "https://www.ycombinator.com/launches/rss";
 
-  async fetch(signal?: AbortSignal): Promise<SourceResult> {
+  async fetch(): Promise<SourceResult> {
     try {
       const res = await fetch(this.feedUrl, {
         headers: { "User-Agent": "InternHack-Signals/1.0" },
-        signal,
       });
       if (!res.ok) {
         return {

@@ -1,22 +1,11 @@
-import React, { useState, useRef, useLayoutEffect } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useParams, Link, Navigate, useNavigate } from "react-router";
+import React, { useState, useCallback } from "react";
+import { useParams, Link, Navigate } from "react-router";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  keepPreviousData,
-} from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import {
-  CheckCircle2,
-  Circle,
-  ExternalLink,
-  Bookmark,
-  BookmarkCheck,
-  BookOpen,
-  TrendingUp,
-  Search,
+  CheckCircle2, Circle, ExternalLink,
+  Bookmark, BookmarkCheck, StickyNote, ChevronDown, ChevronLeft, ChevronRight,
+  Lightbulb, BookOpen, TrendingUp, Search,
 } from "lucide-react";
 import toast from "@/components/ui/toast";
 import api from "../../../lib/axios";
@@ -29,9 +18,7 @@ import { canonicalUrl, SITE_URL } from "../../../lib/seo.utils";
 import { breadcrumbSchema } from "../../../lib/structured-data";
 import { LoadingScreen } from "../../../components/LoadingScreen";
 import { Button } from "../../../components/ui/button";
-import { DIFF_COLOR } from "../../../lib/difficulty-styles";
-import { useDsaLabels } from "./components/useDsaLabels";
-import { DsaLabelFilter } from "./components/DsaLabelFilter";
+import { DIFF_COLOR } from "../../../lib/difficulty-colors";
 
 type DiffFilter = "All" | "Easy" | "Medium" | "Hard";
 
@@ -41,32 +28,24 @@ export default function DsaTopicDetailPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<DiffFilter>("All");
   const [search, setSearch] = useState("");
-  const page = 1; // virtual scroll replaces server-side pagination
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
-
-  const { allLabels, getLabels } = useDsaLabels(!!user);
-  const toggleLabelFilter = (label: string) =>
-    setSelectedLabels((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
-    );
+  const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
+  const [noteValues, setNoteValues] = useState<Record<number, string>>({});
+  const [savingNotes, setSavingNotes] = useState<Set<number>>(new Set());
 
   const diffParam = filter === "All" ? undefined : filter;
   const searchParam = search.trim() || undefined;
 
   const { data: topic, isLoading } = useQuery({
-    queryKey: queryKeys.dsa.topic(slug!, page, {
-      difficulty: diffParam,
-      search: searchParam,
-    }),
+    queryKey: queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam }),
     queryFn: () => {
       const params = new URLSearchParams();
       params.set("page", String(page));
-      params.set("limit", "200"); // covers all current topics; virtualizer handles render performance
+      params.set("limit", "50");
       if (diffParam) params.set("difficulty", diffParam);
       if (searchParam) params.set("search", searchParam);
-      return api
-        .get<DsaTopicDetail>(`/dsa/topics/${slug}?${params}`)
-        .then((r) => r.data);
+      return api.get<DsaTopicDetail>(`/dsa/topics/${slug}?${params}`).then((r) => r.data);
     },
     enabled: !!slug,
     placeholderData: keepPreviousData,
@@ -75,17 +54,9 @@ export default function DsaTopicDetailPage() {
 
   const toggleMutation = useMutation({
     mutationFn: (problemId: number) =>
-      api
-        .post<{
-          problemId: number;
-          solved: boolean;
-        }>(`/dsa/problems/${problemId}/toggle`)
-        .then((r) => r.data),
+      api.post<{ problemId: number; solved: boolean }>(`/dsa/problems/${problemId}/toggle`).then((r) => r.data),
     onMutate: async (problemId) => {
-      const key = queryKeys.dsa.topic(slug!, page, {
-        difficulty: diffParam,
-        search: searchParam,
-      });
+      const key = queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam });
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DsaTopicDetail>(key);
       if (prev) {
@@ -95,23 +66,14 @@ export default function DsaTopicDetailPage() {
             p.id === problemId ? { ...p, solved: !p.solved } : p,
           ),
         };
-        const delta = updated.problems.find((p) => p.id === problemId)!.solved
-          ? 1
-          : -1;
+        const delta = updated.problems.find((p) => p.id === problemId)!.solved ? 1 : -1;
         updated.totalSolved = prev.totalSolved + delta;
         queryClient.setQueryData(key, updated);
       }
       return { prev };
     },
     onError: (_err, _problemId, context) => {
-      if (context?.prev)
-        queryClient.setQueryData(
-          queryKeys.dsa.topic(slug!, page, {
-            difficulty: diffParam,
-            search: searchParam,
-          }),
-          context.prev,
-        );
+      if (context?.prev) queryClient.setQueryData(queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam }), context.prev);
       toast.error("Failed to update progress");
     },
     onSettled: () => {
@@ -122,17 +84,9 @@ export default function DsaTopicDetailPage() {
 
   const bookmarkMutation = useMutation({
     mutationFn: (problemId: number) =>
-      api
-        .post<{
-          problemId: number;
-          bookmarked: boolean;
-        }>(`/dsa/problems/${problemId}/bookmark`)
-        .then((r) => r.data),
+      api.post<{ problemId: number; bookmarked: boolean }>(`/dsa/problems/${problemId}/bookmark`).then((r) => r.data),
     onMutate: async (problemId) => {
-      const key = queryKeys.dsa.topic(slug!, page, {
-        difficulty: diffParam,
-        search: searchParam,
-      });
+      const key = queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam });
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DsaTopicDetail>(key);
       if (prev) {
@@ -146,14 +100,7 @@ export default function DsaTopicDetailPage() {
       return { prev };
     },
     onError: (_err, _problemId, context) => {
-      if (context?.prev)
-        queryClient.setQueryData(
-          queryKeys.dsa.topic(slug!, page, {
-            difficulty: diffParam,
-            search: searchParam,
-          }),
-          context.prev,
-        );
+      if (context?.prev) queryClient.setQueryData(queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam }), context.prev);
       toast.error("Failed to update bookmark");
     },
     onSettled: () => {
@@ -161,31 +108,45 @@ export default function DsaTopicDetailPage() {
     },
   });
 
-  // Client-side label filter layered on top of the server's difficulty/search
-  // filtering. A problem matches when it carries any selected label (union).
-  const filteredProblems = React.useMemo(() => {
-    const all = topic?.problems ?? [];
-    if (selectedLabels.length === 0) return all;
-    return all.filter((p) => {
-      const labels = getLabels(p.id).length
-        ? getLabels(p.id)
-        : (p.labels ?? []);
-      return selectedLabels.some((sel) => labels.includes(sel));
+  const saveNotes = useCallback(async (problemId: number, notes: string) => {
+    setSavingNotes((prev) => new Set(prev).add(problemId));
+    try {
+      await api.put(`/dsa/problems/${problemId}/notes`, { notes });
+      const key = queryKeys.dsa.topic(slug!, page, { difficulty: diffParam, search: searchParam });
+      const prev = queryClient.getQueryData<DsaTopicDetail>(key);
+      if (prev) {
+        queryClient.setQueryData(key, {
+          ...prev,
+          problems: prev.problems.map((p) =>
+            p.id === problemId ? { ...p, notes: notes.trim() || null } : p,
+          ),
+        });
+      }
+    } catch {
+      toast.error("Failed to save notes");
+    } finally {
+      setSavingNotes((prev) => {
+        const next = new Set(prev);
+        next.delete(problemId);
+        return next;
+      });
+    }
+  }, [queryClient, slug, page, diffParam, searchParam]);
+
+  const toggleNotes = (problemId: number, currentNotes: string | null | undefined) => {
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(problemId)) {
+        next.delete(problemId);
+        const val = noteValues[problemId];
+        if (val !== undefined && val !== (currentNotes ?? "")) saveNotes(problemId, val);
+      } else {
+        next.add(problemId);
+        setNoteValues((prev) => ({ ...prev, [problemId]: currentNotes ?? "" }));
+      }
+      return next;
     });
-  }, [topic?.problems, selectedLabels, getLabels]);
-
-  const listRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  useLayoutEffect(() => {
-    setScrollMargin(listRef.current?.offsetTop ?? 0);
-  }, []);
-
-  const virtualizer = useWindowVirtualizer({
-    count: filteredProblems.length,
-    estimateSize: () => 76,
-    overscan: 8,
-    scrollMargin,
-  });
+  };
 
   if (!user && topic && topic.orderIndex >= 5) {
     return <Navigate to="/learn/dsa" replace />;
@@ -197,22 +158,14 @@ export default function DsaTopicDetailPage() {
     return (
       <div className="bg-stone-50 dark:bg-stone-950 min-h-[calc(100vh-4rem)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-8 py-16 text-center">
-          <p className="text-sm text-stone-500 dark:text-stone-400">
-            Topic not found.
-          </p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">Topic not found.</p>
         </div>
       </div>
     );
   }
 
-  const pct =
-    topic.totalProblems > 0
-      ? Math.round((topic.totalSolved / topic.totalProblems) * 100)
-      : 0;
-  const topicNum =
-    topic.orderIndex >= 0
-      ? String(topic.orderIndex + 1).padStart(2, "0")
-      : "00";
+  const pct = topic.totalProblems > 0 ? Math.round((topic.totalSolved / topic.totalProblems) * 100) : 0;
+  const topicNum = topic.orderIndex >= 0 ? String(topic.orderIndex + 1).padStart(2, "0") : "00";
 
   const diffTabs: DiffFilter[] = ["All", "Easy", "Medium", "Hard"];
 
@@ -253,26 +206,17 @@ export default function DsaTopicDetailPage() {
                 {topic.name}
               </h1>
               {topic.description && (
-                <p className="text-sm text-stone-600 dark:text-stone-400 max-w-2xl">
-                  {topic.description}
-                </p>
+                <p className="text-sm text-stone-600 dark:text-stone-400 max-w-2xl">{topic.description}</p>
               )}
             </div>
             {user && (
               <div className="flex items-center gap-2 sm:gap-3 text-[10px] font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400 flex-wrap">
                 <span>
-                  <span className="text-stone-900 dark:text-stone-50 tabular-nums">
-                    {topic.totalSolved}
-                  </span>
-                  <span className="text-stone-400 dark:text-stone-600">
-                    {" "}
-                    / {topic.totalProblems} solved
-                  </span>
+                  <span className="text-stone-900 dark:text-stone-50 tabular-nums">{topic.totalSolved}</span>
+                  <span className="text-stone-400 dark:text-stone-600"> / {topic.totalProblems} solved</span>
                 </span>
                 <span className="h-1 w-1 bg-stone-300 dark:bg-stone-700" />
-                <span className="text-lime-600 dark:text-lime-400 tabular-nums">
-                  {pct}% complete
-                </span>
+                <span className="text-lime-600 dark:text-lime-400 tabular-nums">{pct}% complete</span>
               </div>
             )}
           </div>
@@ -333,9 +277,7 @@ export default function DsaTopicDetailPage() {
               type="text"
               placeholder="Search problems..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-              }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-11 pr-4 py-3 bg-white dark:bg-stone-900 border border-stone-300 dark:border-white/10 rounded-md focus:outline-none focus:border-lime-400 transition-colors text-sm text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600"
             />
           </div>
@@ -349,9 +291,7 @@ export default function DsaTopicDetailPage() {
               return (
                 <button
                   key={d}
-                  onClick={() => {
-                    setFilter(d);
-                  }}
+                  onClick={() => { setFilter(d); setPage(1); }}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                     active
                       ? "bg-stone-900 dark:bg-stone-50 text-stone-50 dark:text-stone-900 border-stone-900 dark:border-stone-50"
@@ -363,78 +303,75 @@ export default function DsaTopicDetailPage() {
               );
             })}
           </div>
-
-          {user && allLabels.length > 0 && (
-            <DsaLabelFilter
-              allLabels={allLabels}
-              selected={selectedLabels}
-              onToggle={toggleLabelFilter}
-              onClear={() => setSelectedLabels([])}
-            />
-          )}
         </motion.div>
 
         {/* Section header */}
         <div className="flex items-center gap-2 mb-3">
           <div className="h-1 w-1 bg-lime-400"></div>
           <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400">
-            problems /{" "}
-            {selectedLabels.length > 0
-              ? `${filteredProblems.length} of ${topic.problems.length}`
-              : topic.problems.length}
+            problems / {topic.problems.length}
           </span>
         </div>
 
-        {/* Problem list — virtualized for performance with dynamic height measurement */}
-        {filteredProblems.length === 0 ? (
-          <div className="py-20 text-center border border-dashed border-stone-300 dark:border-white/10 rounded-md">
-            <Search className="w-8 h-8 text-stone-400 mx-auto mb-3" />
-            <p className="text-sm text-stone-600 dark:text-stone-400">
-              No problems found.
-            </p>
-            <p className="text-[10px] font-mono uppercase tracking-widest text-stone-500 mt-2">
-              try a different filter
-            </p>
-          </div>
-        ) : (
-          <div ref={listRef}>
-            <div
-              style={{
-                height: `${virtualizer.getTotalSize()}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualizer.getVirtualItems().map((virtualItem) => {
-                const problem = filteredProblems[virtualItem.index];
-                return (
-                  <div
-                    key={problem.id}
-                    data-index={virtualItem.index}
-                    ref={virtualizer.measureElement}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${
-                        virtualItem.start - virtualizer.options.scrollMargin
-                      }px)`,
-                    }}
-                  >
-                    <div className="pb-2">
-                      <DsaProblemCard
-                        problem={problem}
-                        pIdx={virtualItem.index}
-                        user={user}
-                        toggleMutation={toggleMutation}
-                        bookmarkMutation={bookmarkMutation}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Problem list */}
+        <div className="space-y-2">
+          {topic.problems.map((problem, pIdx) => (
+            <DsaProblemCard
+              key={problem.id}
+              problem={problem}
+              pIdx={pIdx}
+              user={user}
+              isExpanded={expandedId === problem.id}
+              toggleMutation={toggleMutation}
+              bookmarkMutation={bookmarkMutation}
+              expandedNotes={expandedNotes}
+              savingNotes={savingNotes}
+              noteValues={noteValues}
+              setNoteValues={setNoteValues}
+              saveNotes={saveNotes}
+              toggleNotes={toggleNotes}
+              setExpandedId={setExpandedId}
+              cleanHint={cleanHint}
+            />
+          ))}
+
+          {topic.problems.length === 0 && (
+            <div className="py-20 text-center border border-dashed border-stone-300 dark:border-white/10 rounded-md">
+              <Search className="w-8 h-8 text-stone-400 mx-auto mb-3" />
+              <p className="text-sm text-stone-600 dark:text-stone-400">No problems found.</p>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-stone-500 mt-2">
+                try a different filter
+              </p>
             </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {topic.totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-md border border-stone-300 dark:border-white/10"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Prev
+            </Button>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400 tabular-nums">
+              page {page} / {topic.totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(topic.totalPages, p + 1))}
+              disabled={page >= topic.totalPages}
+              className="rounded-md border border-stone-300 dark:border-white/10"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
         )}
       </div>
@@ -446,16 +383,40 @@ export const DsaProblemCard = React.memo(function DsaProblemCard({
   problem,
   pIdx,
   user,
+  isExpanded,
   toggleMutation,
   bookmarkMutation,
+  expandedNotes,
+  savingNotes,
+  noteValues,
+  setNoteValues,
+  saveNotes,
+  toggleNotes,
+  setExpandedId,
+  cleanHint,
 }: {
   problem: DsaProblem;
   pIdx: number;
   user: User | null;
+  isExpanded: boolean;
   toggleMutation: UseMutationResult<unknown, Error, number>;
   bookmarkMutation: UseMutationResult<unknown, Error, number>;
+  expandedNotes: Set<number>;
+  savingNotes: Set<number>;
+  noteValues: Record<number, string>;
+  setNoteValues: React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  saveNotes: (problemId: number, val: string) => void;
+  toggleNotes: (problemId: number, notes: string | null | undefined) => void;
+  setExpandedId: (val: number | null) => void;
+  cleanHint: (hint: string) => string;
 }) {
-  const navigate = useNavigate();
+  const links: { href: string; label: string }[] = [];
+  if (problem.leetcodeUrl) links.push({ href: problem.leetcodeUrl, label: "LeetCode" });
+  if (problem.gfgUrl) links.push({ href: problem.gfgUrl, label: "GFG" });
+  if (problem.hackerrankUrl) links.push({ href: problem.hackerrankUrl, label: "HackerRank" });
+  if (problem.codechefUrl) links.push({ href: problem.codechefUrl, label: "CodeChef" });
+  if (problem.articleUrl) links.push({ href: problem.articleUrl, label: "Article" });
+  if (problem.videoUrl) links.push({ href: problem.videoUrl, label: "Video" });
 
   return (
     <motion.div
@@ -466,13 +427,12 @@ export const DsaProblemCard = React.memo(function DsaProblemCard({
     >
       <div
         className="flex items-center gap-2 sm:gap-3 px-3 py-3 sm:px-5 sm:py-4 cursor-pointer"
-        onClick={() => navigate(`/learn/dsa/problem/${problem.slug}`)}
+        onClick={() => setExpandedId(isExpanded ? null : problem.id)}
       >
         {user && (
           <Button
             variant="ghost"
             mode="icon"
-            aria-label="Toggle completion"
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
@@ -541,7 +501,6 @@ export const DsaProblemCard = React.memo(function DsaProblemCard({
           <Button
             variant="ghost"
             mode="icon"
-            aria-label="Toggle bookmark"
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
@@ -556,8 +515,128 @@ export const DsaProblemCard = React.memo(function DsaProblemCard({
             )}
           </Button>
         )}
+
+        <ChevronDown
+          className={`w-4 h-4 text-stone-400 dark:text-stone-500 shrink-0 transition-transform duration-200 ${
+            isExpanded ? "rotate-180" : ""
+          }`}
+        />
       </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 sm:px-5 pb-4 space-y-3 border-t border-stone-200 dark:border-white/10 pt-4">
+              {problem.hints.length > 0 && (
+                <div className="bg-stone-50 dark:bg-white/5 border border-stone-200 dark:border-white/10 rounded-md p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lightbulb className="w-3.5 h-3.5 text-lime-600 dark:text-lime-400" />
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400">
+                      / {problem.hints.length === 1 ? "hint" : `hints (${problem.hints.length})`}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {problem.hints.map((hint, i) => (
+                      <div
+                        key={i}
+                        className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed flex gap-1"
+                      >
+                        {problem.hints.length > 1 && (
+                          <span className="font-mono font-medium text-stone-500 dark:text-stone-400 shrink-0">
+                            {i + 1}.
+                          </span>
+                        )}
+                        <span dangerouslySetInnerHTML={{ __html: cleanHint(hint) }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {links.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {links.map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-400 rounded-md text-[10px] font-mono uppercase tracking-widest hover:bg-stone-200 dark:hover:bg-white/10 hover:text-stone-900 dark:hover:text-stone-50 transition-colors no-underline"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      {link.label}
+                    </a>
+                  ))}
+                  <Link
+                    to={`/learn/dsa/problem/${problem.slug}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 dark:bg-stone-50 text-lime-400 rounded-md text-[10px] font-mono uppercase tracking-widest hover:opacity-90 transition-opacity no-underline"
+                  >
+                    view details
+                  </Link>
+                </div>
+              )}
+
+              {user && (
+                <div>
+                  {expandedNotes.has(problem.id) ? (
+                    <div>
+                      <textarea
+                        value={noteValues[problem.id] ?? ""}
+                        onChange={(e) =>
+                          setNoteValues((prev) => ({ ...prev, [problem.id]: e.target.value }))
+                        }
+                        onBlur={() => {
+                          const val = noteValues[problem.id];
+                          if (val !== undefined && val !== (problem.notes ?? "")) {
+                            saveNotes(problem.id, val);
+                          }
+                        }}
+                        placeholder="Add your notes here..."
+                        rows={3}
+                        className="w-full px-4 py-3 text-sm border border-stone-300 dark:border-white/10 rounded-md bg-stone-50 dark:bg-white/5 text-stone-900 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600 focus:outline-none focus:border-lime-400 transition-colors resize-none"
+                      />
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                          {savingNotes.has(problem.id) ? "saving..." : "auto-saves on close"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          mode="link"
+                          onClick={() => toggleNotes(problem.id, problem.notes)}
+                          className="text-[10px] font-mono uppercase tracking-widest text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                        >
+                          close notes
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => toggleNotes(problem.id, problem.notes)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-400 rounded-md text-[10px] font-mono uppercase tracking-widest hover:bg-stone-200 dark:hover:bg-white/10 hover:text-stone-900 dark:hover:text-stone-50 transition-colors cursor-pointer"
+                    >
+                      <StickyNote className="w-3 h-3" />
+                      {problem.notes ? "view notes" : "add notes"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 });
 
+function cleanHint(html: string): string {
+  return html
+    .replace(/<div[^>]*>/gi, "")
+    .replace(/<\/div>/gi, "")
+    .replace(/<code>/gi, "<code class='px-1.5 py-0.5 bg-stone-200 dark:bg-white/10 rounded-md text-sm font-mono'>");
+}

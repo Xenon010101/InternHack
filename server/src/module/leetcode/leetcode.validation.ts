@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const leetcodeCalendarSchema = z.object({
-  username: z.string().min(1).max(50, "Username too long").regex(/^[a-zA-Z0-9_-]+$/, "Invalid username format"),
+  username: z.string().min(1).max(50, "Username too long"),
 });
 
 export const leetcodeCalendarQuerySchema = z.object({

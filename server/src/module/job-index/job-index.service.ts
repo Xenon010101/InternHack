@@ -55,6 +55,21 @@ export class JobIndexService {
     sourceType: JobSourceType,
     sourceId: number,
   ): Promise<NormalizedJobInput | null> {
+    if (sourceType === "INTERNAL") {
+      const job = await prisma.job.findUnique({ where: { id: sourceId } });
+      if (!job || job.status !== "PUBLISHED") return null;
+      return {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        salary: job.salary,
+        description: job.description,
+        tags: job.tags,
+        applicationUrl: `/jobs/${job.id}`,
+        deadline: job.deadline,
+      };
+    }
+
     if (sourceType === "SCRAPED") {
       const sj = await prisma.scrapedJob.findUnique({ where: { id: sourceId } });
       if (!sj || sj.status !== "ACTIVE") return null;
@@ -90,6 +105,17 @@ export class JobIndexService {
   async syncAllNewJobs(): Promise<number> {
     let synced = 0;
 
+    // Internal published jobs not yet in index
+    const internalJobs = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT j.id FROM "job" j
+      LEFT JOIN "jobIndex" ji ON ji."sourceType" = 'INTERNAL' AND ji."sourceId" = j.id
+      WHERE ji.id IS NULL AND j.status = 'PUBLISHED'
+    `;
+    for (const { id } of internalJobs) {
+      await this.syncJob("INTERNAL", id);
+      synced++;
+    }
+
     // Active scraped jobs not yet in index
     const scrapedJobs = await prisma.$queryRaw<Array<{ id: number }>>`
       SELECT sj.id FROM "scrapedJob" sj
@@ -121,6 +147,12 @@ export class JobIndexService {
       UPDATE "jobIndex" SET "isActive" = false
       WHERE "sourceType" = 'SCRAPED' AND "sourceId" IN (
         SELECT id FROM "scrapedJob" WHERE status != 'ACTIVE'
+      ) AND "isActive" = true
+    `;
+    await prisma.$executeRaw`
+      UPDATE "jobIndex" SET "isActive" = false
+      WHERE "sourceType" = 'INTERNAL' AND "sourceId" IN (
+        SELECT id FROM "job" WHERE status != 'PUBLISHED'
       ) AND "isActive" = true
     `;
     await prisma.$executeRaw`
@@ -184,8 +216,7 @@ export class JobIndexService {
           job.id,
         );
         embedded++;
-      } catch (err) {
-        console.error(`[JobIndex] Failed to generate embedding for job ${job.id}:`, err);
+      } catch {
         // pgvector / embedding column not set up yet, skip
       }
       await new Promise((r) => setTimeout(r, 50));
@@ -221,8 +252,7 @@ export class JobIndexService {
       try {
         await this.generateUserEmbedding(pref.userId);
         count++;
-      } catch (err) {
-        console.error(`[JobIndex] Failed to generate embedding for user ${pref.userId}:`, err);
+      } catch {
         // pgvector / embedding column not set up yet, skip
       }
       await new Promise((r) => setTimeout(r, 50));
@@ -339,8 +369,8 @@ export class JobIndexService {
         limit,
       );
       return jobs;
-    } catch (err) {
-      console.error("[JobIndex] semanticSearch failed:", err);
+    } catch {
+      // pgvector / embedding column not set up yet, fall back to empty
       return [];
     }
   }

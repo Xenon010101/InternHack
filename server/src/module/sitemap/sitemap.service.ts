@@ -17,7 +17,7 @@ const LEARN_LANGUAGES = [
 
 const LEARN_EXTRAS = [
   "/learn/sql", "/learn/sql/playground",
-  "/learn/dsa", "/learn/dsa/companies",
+  "/learn/dsa", "/learn/dsa/companies", "/learn/dsa/patterns",
   "/learn/aptitude", "/learn/aptitude/companies",
   "/learn/interview",
 ];
@@ -68,6 +68,8 @@ export class SitemapService {
       { loc: `${SITE_URL}/ats-score`, changefreq: "monthly", priority: 0.9, lastmod: now },
       { loc: `${SITE_URL}/grants`, changefreq: "weekly", priority: 0.7, lastmod: now },
       { loc: `${SITE_URL}/opensource`, changefreq: "weekly", priority: 0.7, lastmod: now },
+      { loc: `${SITE_URL}/blog`, changefreq: "daily", priority: 0.8, lastmod: now },
+      { loc: `${SITE_URL}/for-recruiters`, changefreq: "monthly", priority: 0.6, lastmod: now },
       { loc: `${SITE_URL}/learn`, changefreq: "weekly", priority: 0.9, lastmod: now },
       { loc: `${SITE_URL}/roadmaps`, changefreq: "weekly", priority: 0.9, lastmod: now },
       { loc: `${SITE_URL}/login`, changefreq: "monthly", priority: 0.3 },
@@ -107,6 +109,38 @@ export class SitemapService {
         loc: `${SITE_URL}/jobs/t/${s}`,
         changefreq: "weekly",
         priority: 0.6,
+      });
+    }
+
+    // ── 3. Published jobs ────────────────────────────────────────
+    const jobs = await prisma.job.findMany({
+      where: { status: "PUBLISHED" },
+      select: { id: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5000,
+    });
+    for (const job of jobs) {
+      urls.push({
+        loc: `${SITE_URL}/jobs/${job.id}`,
+        lastmod: toIsoDate(job.updatedAt),
+        changefreq: "weekly",
+        priority: 0.7,
+      });
+    }
+
+    // ── 4. Published blog posts ──────────────────────────────────
+    const posts = await prisma.blogPost.findMany({
+      where: { status: "PUBLISHED" },
+      select: { slug: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5000,
+    });
+    for (const post of posts) {
+      urls.push({
+        loc: `${SITE_URL}/blog/${post.slug}`,
+        lastmod: toIsoDate(post.updatedAt),
+        changefreq: "weekly",
+        priority: 0.7,
       });
     }
 
@@ -185,22 +219,7 @@ export class SitemapService {
       }
     }
 
-    // ── 8. Open-source repo catalog pages ────────────────────────
-    const ossRepos = await prisma.opensourceRepo.findMany({
-      select: { owner: true, name: true, updatedAt: true },
-      orderBy: { stars: "desc" },
-      take: 5000,
-    });
-    for (const repo of ossRepos) {
-      urls.push({
-        loc: `${SITE_URL}/opensource/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`,
-        lastmod: toIsoDate(repo.updatedAt),
-        changefreq: "weekly",
-        priority: 0.6,
-      });
-    }
-
-    // ── 9. Aptitude topics ───────────────────────────────────────
+    // ── 8. Aptitude topics ───────────────────────────────────────
     const aptTopics = await prisma.aptitudeTopic.findMany({
       select: { slug: true },
     });

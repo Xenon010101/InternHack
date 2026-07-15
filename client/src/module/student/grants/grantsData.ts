@@ -38,17 +38,15 @@ export type GrantCategory =
   | "Climate"
   | "AI & Deep Tech";
 
-// Startup-relevant categories first (non-dilutive/founder funding), academic and
-// student-only categories last.
 export const GRANT_CATEGORIES: GrantCategory[] = [
   "Government",
-  "Accelerator",
   "AI & Deep Tech",
-  "Web3",
   "Climate",
-  "Research",
+  "Accelerator",
   "University",
   "Global Youth",
+  "Research",
+  "Web3",
   "Education",
   "Gaming",
 ];

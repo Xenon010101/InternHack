@@ -179,7 +179,6 @@ export default function GitHubImportModal({
                 <Button
                   variant="ghost"
                   mode="icon"
-                  aria-label="Close"
                   onClick={handleClose}
                   className="text-gray-500"
                 >

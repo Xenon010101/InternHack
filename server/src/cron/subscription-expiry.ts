@@ -9,40 +9,24 @@ let cronJob: cron.ScheduledTask | null = null;
  * Runs daily at midnight. Sets subscriptionStatus to EXPIRED
  * and subscriptionPlan to FREE for any ACTIVE user past their end date.
  */
-export async function runSubscriptionExpiry(): Promise<void> {
+async function expireSubscriptions(): Promise<void> {
   const now = new Date();
 
-  // Find users whose subscriptions are expiring
-  const expiringUsers = await prisma.user.findMany({
+  const result = await prisma.user.updateMany({
     where: {
       subscriptionStatus: "ACTIVE",
       subscriptionEndDate: { lt: now },
       subscriptionPlan: { in: ["MONTHLY", "YEARLY"] },
     },
-    select: { id: true },
-  });
-
-  if (expiringUsers.length === 0) return;
-
-  const userIds = expiringUsers.map((u) => u.id);
-
-  // Update them in bulk
-  await prisma.user.updateMany({
-    where: { id: { in: userIds } },
     data: {
       subscriptionStatus: "EXPIRED",
       subscriptionPlan: "FREE",
     },
   });
 
-  // Invalidate cache for each user — bust both visitor variants (:auth and :guest).
-  const { cacheDel, cacheDelPattern } = await import("../utils/cache.js");
-  for (const userId of userIds) {
-    await cacheDel(`profile:me:${userId}`).catch((err) => console.error("Failed to invalidate profile cache:", err));
-    await cacheDelPattern(`profile:public:${userId}:`).catch((err) => console.error("Failed to invalidate profile cache:", err));
+  if (result.count > 0) {
+    console.log(`[Cron] Expired ${result.count} subscription(s)`);
   }
-
-  console.log(`[Cron] Expired ${userIds.length} subscription(s) and cleared profile cache.`);
 }
 
 export function startSubscriptionExpiryCron(): void {
@@ -52,7 +36,7 @@ export function startSubscriptionExpiryCron(): void {
   cronJob = cron.schedule("0 0 * * *", () => {
     void withAdvisoryLock("subscription-expiry", async () => {
       try {
-        await runSubscriptionExpiry();
+        await expireSubscriptions();
       } catch (err) {
         console.error("[Cron] Subscription expiry error:", err);
       }

@@ -1,5 +1,4 @@
-﻿import { Prisma } from "@prisma/client";
-import { prisma } from "../../database/db.js";
+﻿import { prisma } from "../../database/db.js";
 import { jobIndexService } from "../job-index/job-index.service.js";
 import { cacheGet, cacheSet, cacheDel } from "../../utils/cache.js";
 
@@ -60,12 +59,7 @@ export class JobFeedService {
     await prisma.userJobPreference.update({
       where: { userId },
       data: { dismissedJobIds: { push: match.jobIndexId } },
-    }).catch((err) => {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
-        return;
-      }
-      throw err;
-    });
+    }).catch(() => {}); // pref may not exist yet
   }
 
   async save(userId: number, matchId: number) {
@@ -135,7 +129,7 @@ export class JobFeedService {
     });
 
     // Re-generate embedding asynchronously
-    jobIndexService.generateUserEmbedding(userId).catch((err) => console.error("Failed to generate user embedding:", err));
+    jobIndexService.generateUserEmbedding(userId).catch(() => {});
 
     await cacheDel(prefKey(userId));
     return pref;

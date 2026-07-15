@@ -2,18 +2,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { motion } from "framer-motion";
 import {
-  ArrowRight,
   ArrowUpRight,
-  BarChart3,
   BookOpen,
+  ChevronRight,
   Clock,
-  Download,
-  Filter,
-  Loader2,
   Map as MapIcon,
   Search,
   Sparkles,
-  Tag,
   Users,
   Wand2,
 } from "lucide-react";
@@ -27,18 +22,8 @@ import type { RoadmapListItem, RoadmapEnrollmentListItem } from "../../../lib/ty
 import { useSearchParams } from "react-router";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { X } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../../../lib/query-keys";
-import { GridBackground } from "../../../components/ui/GridBackground";
-import { EditorialDropdown } from "../../../components/ui/EditorialDropdown";
-import { Button } from "../../../components/ui/button";
-import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import toast from "../../../components/ui/toast";
-
-const CATEGORY_OPTIONS = ["Frontend", "Backend", "Fullstack", "AI", "Mobile", "DevOps", "Blockchain"];
-const TAG_OPTIONS = ["React", "Node.js", "Python", "System Design", "AWS", "SQL"];
-const LEVEL_OPTIONS = ["ALL_LEVELS", "BEGINNER", "INTERMEDIATE", "ADVANCED"];
-
 
 interface ListResponse {
   roadmaps: RoadmapListItem[];
@@ -75,12 +60,6 @@ export default function RoadmapsLandingPage() {
   const isStudent = isAuthenticated && user?.role === "STUDENT";
   const { collapsed, sidebarWidth, sidebar } = useStudentSidebar();
   const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
-
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedRoadmapId, setSelectedRoadmapId] = useState<number | null>(null);
 
   // Filter states from URL
   const [searchInput, setSearchInput] = useState(searchParams.get("search") || "");
@@ -109,79 +88,13 @@ export default function RoadmapsLandingPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: communityData } = useQuery({
-    queryKey: queryKeys.roadmaps.community(),
-    queryFn: () => api.get<{ roadmaps: RoadmapListItem[] }>("/roadmaps/community").then(res => res.data),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const roadmaps = useMemo(() => roadmapsData?.roadmaps || [], [roadmapsData]);
   const enrollments = useMemo(() => {
     if (enrollmentsError) return []; // Fallback to empty but we'll show error below
     return enrollmentsData?.enrollments || [];
   }, [enrollmentsData, enrollmentsError]);
-  const completedEnrollments = useMemo(
-    () =>
-      enrollments.filter((e) =>
-        e.topicProgress.length > 0 &&
-        e.topicProgress.every((p) => p.status === "COMPLETED")
-      ),
-    [enrollments]
-  );
-  const completedCount = completedEnrollments.length;
   const loading = roadmapsLoading;
   const error = (roadmapsError || (isStudent && enrollmentsError)) ? "Could not load roadmaps. Please try again." : null;
-
-  const selectedEnrollment = enrollments.find((e) => e.id === selectedRoadmapId);
-
-  const downloadPdf = async (id: number, slug: string) => {
-    setDownloadingId(id);
-    try {
-      const res = await api.get(`/roadmaps/me/enrollments/${id}/pdf`, {
-        responseType: "blob",
-      });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${slug}-roadmap.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDF downloaded successfully");
-    } catch {
-      toast.error("PDF generation failed. Please try again.");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const handleLeaveClick = (roadmapId: number) => {
-    setSelectedRoadmapId(roadmapId);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleLeaveConfirm = async () => {
-    try {
-      setIsDeleting(true);
-      const res = await api.delete(`/roadmaps/me/enrollments/${selectedRoadmapId}`);
-      if (res.status === 204) {
-        toast.success("Roadmap left successfully!");
-        await queryClient.invalidateQueries({ queryKey: queryKeys.roadmaps.enrollments() });
-      } else {
-        toast.error("Failed to leave roadmap. Please try again.");
-      }
-    } catch {
-      toast.error("Failed to leave roadmap. Please try again.");
-    } finally {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      setSelectedRoadmapId(null);
-    }
-  };
-
-  const handleLeaveClose = () => {
-    setDeleteDialogOpen(false);
-    setSelectedRoadmapId(null);
-  };
 
   // Sync search input with URL when typing
   useEffect(() => {
@@ -218,13 +131,7 @@ export default function RoadmapsLandingPage() {
 
   // Secondary client-side filtering for ultra-smooth UX while API loads
   const filtered = useMemo(() => {
-    let result = roadmaps.filter((r) => {
-      const enrollment = enrollments.find((e) => e.roadmap.slug === r.slug);
-      if (!enrollment) return true;
-      const isCompleted = enrollment.topicProgress.length > 0 && enrollment.topicProgress.every((p) => p.status === "COMPLETED");
-      return !isCompleted;
-    });
-
+    let result = roadmaps;
     const needle = debouncedSearch.trim().toLowerCase();
     
     if (needle) {
@@ -241,18 +148,15 @@ export default function RoadmapsLandingPage() {
     }
     
     if (tag) {
-      result = result.filter(r =>
-        r.tags.map(t => t.toLowerCase()).includes(tag.toLowerCase())
-      );
+      result = result.filter(r => r.tags.includes(tag));
     }
+
     if (category) {
-      result = result.filter(r =>
-        r.tags.map(t => t.toLowerCase()).includes(category.toLowerCase())
-      );
+      result = result.filter(r => r.tags.includes(category));
     }
     
     return result;
-  }, [roadmaps, enrollments, debouncedSearch, level, tag, category]);
+  }, [roadmaps, debouncedSearch, level, tag, category]);
 
   // "In progress" is built directly from enrollments so AI-generated roadmaps
   // (isPublished: false) are included even though they're absent from the
@@ -260,8 +164,6 @@ export default function RoadmapsLandingPage() {
   const inProgressEnrollments = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
     return enrollments.filter((e) => {
-      const isCompleted = e.topicProgress.length > 0 && e.topicProgress.every((p) => p.status === "COMPLETED");
-      if (isCompleted) return false;
       const r = e.roadmap;
       if (needle) {
         const matchesText =
@@ -271,8 +173,8 @@ export default function RoadmapsLandingPage() {
         if (!matchesText) return false;
       }
       if (level && level !== "ALL_LEVELS" && r.level && r.level !== level) return false;
-      if (tag && !(r.tags ?? []).map(t => t.toLowerCase()).includes(tag.toLowerCase())) return false;
-      if (category && !(r.tags ?? []).map(t => t.toLowerCase()).includes(category.toLowerCase())) return false;
+      if (tag && !(r.tags ?? []).includes(tag)) return false;
+      if (category && !(r.tags ?? []).includes(category)) return false;
       return true;
     });
   }, [enrollments, debouncedSearch, level, tag, category]);
@@ -310,7 +212,14 @@ export default function RoadmapsLandingPage() {
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pb-16">
         {/* Vertical column gridlines, same atmosphere as the Learn hub */}
-        <GridBackground />
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none opacity-[0.04] dark:opacity-[0.05] z-0"
+          style={{
+            backgroundImage: "linear-gradient(to right, rgba(120,113,108,0.25) 1px, transparent 1px)",
+            backgroundSize: "120px 100%",
+          }}
+        />
 
         <div className="relative">
           {/* Editorial header */}
@@ -350,20 +259,12 @@ export default function RoadmapsLandingPage() {
                 </span>
               </span>
               {isStudent && (
-                <>
                 <span>
                   enrolled
                   <span className="text-stone-900 dark:text-stone-50 text-sm font-bold tabular-nums ml-2">
                     {enrollments.length}
                   </span>
                 </span>
-                <span>
-                  completed
-                  <span className="text-lime-600 dark:text-lime-500 text-sm font-bold tabular-nums ml-2">
-                    {completedCount}
-                  </span>
-                </span>
-                </>
               )}
               <span>
                 free
@@ -371,42 +272,6 @@ export default function RoadmapsLandingPage() {
               </span>
             </div>
           </motion.div>
-
-          {/* Certificates CTA */}
-          {isStudent && completedCount > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mb-6"
-            >
-              <Link
-                to="/learn/roadmaps/certificates"
-                className="group relative block overflow-hidden bg-lime-400 text-stone-950 rounded-md p-5 sm:p-6 no-underline border border-lime-500 hover:bg-lime-300 transition-colors"
-              >
-                <div className="relative flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] mb-1">
-                      certificates
-                    </p>
-
-                    <p className="text-lg font-bold leading-tight">
-                      View all certificates
-                    </p>
-
-                    <p className="text-sm mt-1 opacity-80">
-                      Browse and share your completed roadmap certificates.
-                    </p>
-                  </div>
-
-                  <ArrowUpRight
-                    className="w-5 h-5 shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform"
-                    aria-hidden="true"
-                  />
-                </div>
-              </Link>
-            </motion.div>
-          )}
 
           {/* AI generate CTA */}
           <motion.div
@@ -473,53 +338,58 @@ export default function RoadmapsLandingPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter roadmaps">
-                <EditorialDropdown
-                  icon={<Filter className="w-3.5 h-3.5" />}
-                  label="category"
-                  value={category}
-                  onChange={(v) => updateFilter("category", v)}
-                  options={[
-                    { value: "", label: "All categories" },
-                    ...CATEGORY_OPTIONS.map((cat) => ({ value: cat, label: cat })),
-                  ]}
-                />
-                <EditorialDropdown
-                  icon={<Tag className="w-3.5 h-3.5" />}
-                  label="tag"
-                  value={tag}
-                  onChange={(v) => updateFilter("tag", v)}
-                  options={[
-                    { value: "", label: "All tags" },
-                    ...TAG_OPTIONS.map((t) => ({ value: t, label: t })),
-                  ]}
-                />
-                <EditorialDropdown
-                  icon={<BarChart3 className="w-3.5 h-3.5" />}
-                  label="level"
-                  value={level}
-                  onChange={(v) => updateFilter("level", v)}
-                  options={LEVEL_OPTIONS.map((l) => ({
-                    value: l,
-                    label:
-                      l === "ALL_LEVELS"
-                        ? "All levels"
-                        : l.charAt(0) + l.slice(1).toLowerCase(),
-                  }))}
-                />
+            <div className="flex flex-col gap-4">
+              {/* Category Filters */}
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by category">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mr-2" aria-hidden="true">Category:</span>
+                {["Frontend", "Backend", "Fullstack", "AI", "Mobile", "DevOps", "Blockchain"].map((cat) => (
+                  <FilterChip
+                    key={cat}
+                    label={cat}
+                    active={category === cat}
+                    onClick={() => updateFilter("category", category === cat ? "" : cat)}
+                  />
+                ))}
               </div>
 
-              {(searchInput || tag || category || (level && level !== "ALL_LEVELS")) && (
-                <button
-                  onClick={clearFilters}
-                  aria-label="Clear all filters"
-                  className="text-[10px] font-mono uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" aria-hidden="true" />
-                  Clear all filters
-                </button>
-              )}
+              {/* Tags Filters */}
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by tag">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mr-2" aria-hidden="true">Tags:</span>
+                {["React", "Node.js", "Python", "System Design", "AWS", "SQL"].map((t) => (
+                  <FilterChip
+                    key={t}
+                    label={t}
+                    active={tag === t}
+                    onClick={() => updateFilter("tag", tag === t ? "" : t)}
+                  />
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                {/* Level Filters */}
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by level">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mr-2" aria-hidden="true">Level:</span>
+                  {["ALL_LEVELS", "BEGINNER", "INTERMEDIATE", "ADVANCED"].map((l) => (
+                    <FilterChip
+                      key={l}
+                      label={l.replace("_", " ")}
+                      active={level === l}
+                      onClick={() => updateFilter("level", l)}
+                    />
+                  ))}
+                </div>
+
+                {(searchInput || tag || category || (level && level !== "ALL_LEVELS")) && (
+                  <button
+                    onClick={clearFilters}
+                    aria-label="Clear all filters"
+                    className="text-[10px] font-mono uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" aria-hidden="true" />
+                    Clear all filters
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-stone-200 dark:border-white/5">
@@ -572,9 +442,6 @@ export default function RoadmapsLandingPage() {
                       key={e.id}
                       enrollment={e}
                       index={idx}
-                      downloading={downloadingId === e.id}
-                      onDownload={() => downloadPdf(e.id, e.roadmap.slug)}
-                      onLeaveClick={() => handleLeaveClick(e.id)}
                     />
                   ))}
                 </RoadmapSection>
@@ -591,46 +458,28 @@ export default function RoadmapsLandingPage() {
                 ))}
               </RoadmapSection>
 
-              {communityData && communityData.roadmaps.length > 0 && (
-                <RoadmapSection
-                  label="community"
-                  title="Made by the community"
-                  count={communityData.roadmaps.length}
-                  className="mt-14"
+              {/* Footer hint */}
+              {isStudent && enrollments.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-14 flex justify-center"
                 >
-                  {communityData.roadmaps.map((r, idx) => (
-                    <CommunityRoadmapCard key={r.id} roadmap={r} index={idx} />
-                  ))}
-                </RoadmapSection>
+                  <Link
+                    to="/student/roadmaps"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-lime-400 dark:hover:border-lime-600 rounded-md text-xs font-mono uppercase tracking-widest text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-stone-50 transition-colors no-underline"
+                  >
+                    <MapIcon className="w-3.5 h-3.5 text-lime-500" />
+                    open my dashboard
+                    <ChevronRight className="w-3 h-3" />
+                  </Link>
+                </motion.div>
               )}
             </>
           )}
         </div>
       </div>
-
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        title="Leave Roadmap?"
-        confirmLabel="Yes, leave"
-        cancelLabel="No"
-        confirmVariant="danger"
-        loading={isDeleting}
-        onCancel={handleLeaveClose}
-        onConfirm={handleLeaveConfirm}
-      >
-        {selectedEnrollment && (
-          <div className="space-y-4">
-            <p className="text-sm text-stone-600 dark:text-stone-400">
-              <strong className="font-semibold text-stone-900 dark:text-white">
-                Leaving "{selectedEnrollment.roadmap.title}" will permanently erase all saved progress and topic completion data.
-              </strong>
-            </p>
-            <p className="text-sm text-stone-600 dark:text-stone-400">
-              Are you sure you want to leave this roadmap?
-            </p>
-          </div>
-        )}
-      </ConfirmDialog>
     </Chrome>
   );
 }
@@ -675,15 +524,9 @@ function RoadmapSection({
 function EnrollmentCard({
   enrollment,
   index,
-  downloading,
-  onDownload,
-  onLeaveClick,
 }: {
   enrollment: RoadmapEnrollmentListItem;
   index: number;
-  downloading: boolean;
-  onDownload: () => void;
-  onLeaveClick: () => void;
 }) {
   const MAX_STAGGER = 8;
   const delay = 0.05 + Math.min(index, MAX_STAGGER) * 0.04;
@@ -700,31 +543,30 @@ function EnrollmentCard({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay, duration: 0.4 }}
-        className="relative flex flex-col bg-white dark:bg-stone-900 p-5 rounded-md border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/30 transition-colors h-full"
       >
-        {/* Top-right badge */}
-        <span
-          className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5"
-          aria-hidden="true"
-        >
-          {isAi ? (
-            <>
-              <Sparkles className="w-3 h-3 text-lime-500" />
-              ai · enrolled
-            </>
-          ) : (
-            <>
-              <span className="h-1 w-1 bg-lime-400" />
-              enrolled
-            </>
-          )}
-        </span>
-
         <Link
           to={`/learn/roadmaps/${r.slug}`}
           aria-label={`${r.title}, enrolled, ${percentComplete}% complete`}
-          className="group block no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:ring-offset-2"
+          className="group relative flex flex-col bg-white dark:bg-stone-900 p-5 rounded-md border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/30 transition-colors h-full no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:ring-offset-2"
         >
+          {/* Top-right badge */}
+          <span
+            className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5"
+            aria-hidden="true"
+          >
+            {isAi ? (
+              <>
+                <Sparkles className="w-3 h-3 text-lime-500" />
+                ai · enrolled
+              </>
+            ) : (
+              <>
+                <span className="h-1 w-1 bg-lime-400" />
+                enrolled
+              </>
+            )}
+          </span>
+
           <div className="flex items-start gap-3 mb-3 pr-24">
             <div
               className="w-10 h-10 rounded-md bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-white/10 flex items-center justify-center shrink-0"
@@ -774,52 +616,24 @@ function EnrollmentCard({
               />
             </div>
           </div>
+
+          <div className="mt-auto flex items-center justify-between pt-3 border-t border-stone-100 dark:border-white/5">
+            <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-stone-500">
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" aria-hidden="true" />
+                <span>{r.estimatedHours}h</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <BookOpen className="w-3 h-3" aria-hidden="true" />
+                <span>{r.topicCount} topics</span>
+              </span>
+            </div>
+            <ArrowUpRight
+              className="w-4 h-4 text-stone-400 group-hover:text-lime-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
+              aria-hidden="true"
+            />
+          </div>
         </Link>
-
-        <div className="mt-auto pt-3 border-t border-stone-100 dark:border-white/5">
-          <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-3">
-            <span className="inline-flex items-center gap-1">
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              <span>{r.estimatedHours}h</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <BookOpen className="w-3 h-3" aria-hidden="true" />
-              <span>{r.topicCount} topics</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button asChild variant="mono" size="sm">
-              <Link to={`/learn/roadmaps/${r.slug}`}>
-                Resume
-                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDownload}
-              disabled={downloading}
-              aria-label={downloading ? `Downloading PDF for ${r.title}` : `Download PDF for ${r.title}`}
-            >
-              {downloading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                <Download className="w-3.5 h-3.5" aria-hidden="true" />
-              )}
-              PDF
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onLeaveClick}
-              className="ml-auto"
-              aria-label={`Leave ${r.title} roadmap`}
-            >
-              Leave
-            </Button>
-          </div>
-        </div>
       </motion.div>
     </li>
   );
@@ -902,78 +716,18 @@ function RoadmapCard({
   );
 }
 
-function CommunityRoadmapCard({
-  roadmap,
-  index,
-}: {
-  roadmap: RoadmapListItem;
-  index: number;
-}) {
-  const MAX_STAGGER = 8;
-  const delay = 0.05 + Math.min(index, MAX_STAGGER) * 0.04;
-
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <li>
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay, duration: 0.4 }}
-      >
-        <Link
-          to={`/roadmaps/${roadmap.slug}`}
-          aria-label={roadmap.title}
-          className="group relative flex flex-col bg-white dark:bg-stone-900 p-5 rounded-md border border-stone-200 dark:border-white/10 hover:border-stone-400 dark:hover:border-white/30 transition-colors h-full no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:ring-offset-2"
-        >
-          <span className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5" aria-hidden="true">
-            <span className="h-1 w-1 bg-lime-400" />
-            ai
-          </span>
-
-          <div className="flex items-start gap-3 mb-3 pr-16">
-            <div
-              className="w-10 h-10 rounded-md bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800/40 flex items-center justify-center shrink-0"
-              aria-hidden="true"
-            >
-              <Wand2 className="w-5 h-5 text-lime-600 dark:text-lime-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold tracking-tight text-stone-900 dark:text-stone-50 line-clamp-1 leading-tight group-hover:text-lime-700 dark:group-hover:text-lime-400 transition-colors">
-                {roadmap.title}
-              </h3>
-              <span className="text-xs font-mono uppercase tracking-widest text-stone-500 mt-0.5 block truncate">
-                {roadmap.level.replace("_", " ").toLowerCase()}
-              </span>
-            </div>
-          </div>
-
-          <p className="text-sm text-stone-600 dark:text-stone-400 line-clamp-2 mb-4 leading-relaxed">
-            {roadmap.shortDescription}
-          </p>
-
-          <div className="mt-auto flex items-center justify-between pt-3 border-t border-stone-100 dark:border-white/5">
-            <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-stone-500">
-              <span className="inline-flex items-center gap-1">
-                <Clock className="w-3 h-3" aria-hidden="true" />
-                <span>{roadmap.estimatedHours}h</span>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <BookOpen className="w-3 h-3" aria-hidden="true" />
-                <span>{roadmap.topicCount} topics</span>
-              </span>
-              {roadmap.creatorName && (
-                <span className="inline-flex items-center gap-1">
-                  <Users className="w-3 h-3" aria-hidden="true" />
-                  <span className="truncate max-w-24">{roadmap.creatorName}</span>
-                </span>
-              )}
-            </div>
-            <ArrowUpRight
-              className="w-4 h-4 text-stone-400 group-hover:text-lime-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
-              aria-hidden="true"
-            />
-          </div>
-        </Link>
-      </motion.div>
-    </li>
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-widest transition-all ${
+        active
+          ? "bg-lime-400 text-stone-950 font-bold border border-lime-500 shadow-sm"
+          : "bg-white dark:bg-stone-900 text-stone-500 hover:text-stone-900 dark:hover:text-stone-300 border border-stone-200 dark:border-white/10"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

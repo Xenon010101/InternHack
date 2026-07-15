@@ -14,16 +14,12 @@ import {
   roadmapSlugParam,
   topicSlugParam,
   updateProgressSchema,
-  updateRoadmapSchema,
-  shareTokenSchema
 } from "./roadmap.validation.js";
 import {
   buildWeeklyPlan,
   getEnrollmentAnalyticsForUser,
-    enrollUser,
-  getEnrollmentAnalyticsBatchForUser,
+  enrollUser,
   findDuplicateRoadmap,
-  getEnrollmentByRoadmapSlugForUser,
   getEnrollmentForUser,
   getRoadmapBySlug,
   getTopicBySlug,
@@ -33,7 +29,6 @@ import {
   summarizeProgress,
   updateTopicProgress,
   deleteEnrollment,
-  listCommunityRoadmaps,
 } from "./roadmap.service.js";
 import {
   buildRoadmapSlug,
@@ -47,21 +42,11 @@ import { sendEmail } from "../../utils/email.utils.js";
 import { roadmapWelcomeEmailHtml } from "../../utils/email-templates.js";
 // FIX: import clearCache so we can bust the cache for the new roadmap slug
 import { clearCache } from "../../middleware/cache.middleware.js";
-import { getPlanTier, MONTHLY_LIMITS } from "../../config/usage-limits.js";
 
 const validationError = (res: Response, errors: unknown) =>
   res.status(400).json({ message: "Validation failed", errors });
 
 // ─── Public ────────────────────────────────────────────────────────────────
-export async function getCommunityRoadmaps(_req: Request, res: Response, next: NextFunction) {
-  try {
-    const roadmaps = await listCommunityRoadmaps();
-    res.json({ roadmaps });
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getRoadmaps(req: Request, res: Response, next: NextFunction) {
   try {
     const parsed = listQuerySchema.safeParse(req.query);
@@ -78,9 +63,7 @@ export async function getRoadmaps(req: Request, res: Response, next: NextFunctio
 
 export async function getRoadmap(req: Request, res: Response, next: NextFunction) {
   try {
-    const slug = req.params.slug;
-
-const parsed = roadmapSlugParam.safeParse({ slug });
+    const parsed = roadmapSlugParam.safeParse(req.params);
     if (!parsed.success) {
       validationError(res, parsed.error.flatten().fieldErrors);
       return;
@@ -176,12 +159,8 @@ export async function enroll(req: Request, res: Response, next: NextFunction) {
         enrollmentId: enrollment.id,
       });
       if (full) {
-        const u = await prisma.user.findUnique({
-          where: { id: req.user!.id },
-          select: { name: true },
-        });
         const pdfBuffer = await generateRoadmapPdf({
-          user: { name: u?.name ?? req.user!.email },
+          user: { name: req.user!.email },
           roadmap: {
             title: full.roadmap.title,
             shortDescription: full.roadmap.shortDescription,
@@ -285,28 +264,6 @@ export async function getMyEnrollments(req: Request, res: Response, next: NextFu
   }
 }
 
-export async function getMyEnrollmentByRoadmapSlug(req: Request, res: Response, next: NextFunction) {
-  try {
-    const params = roadmapSlugParam.safeParse(req.params);
-    if (!params.success) {
-      validationError(res, params.error.flatten().fieldErrors);
-      return;
-    }
-
-    const enrollment = await getEnrollmentByRoadmapSlugForUser({
-      userId: req.user!.id,
-      slug: params.data.slug,
-    });
-
-    res.json({
-      enrolled: Boolean(enrollment),
-      enrollment,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getMyEnrollment(req: Request, res: Response, next: NextFunction) {
   try {
     const params = enrollmentIdParam.safeParse(req.params);
@@ -348,18 +305,6 @@ export async function getMyEnrollmentAnalytics(req: Request, res: Response, next
       return;
     }
 
-    res.json({ analytics });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getMyEnrollmentsAnalyticsBatch(req: Request, res: Response, next: NextFunction) {
-  try {
-    const analytics =
-  await getEnrollmentAnalyticsBatchForUser({
-    userId: req.user!.id,
-  });
     res.json({ analytics });
   } catch (err) {
     next(err);
@@ -420,65 +365,6 @@ export async function patchTopicProgress(req: Request, res: Response, next: Next
       return;
     }
     next(err);
-  }
-}
-export async function updateRoadmap(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const slug = Array.isArray(req.params.slug)
-      ? req.params.slug[0]
-      : req.params.slug;
-
-    if (!slug) {
-      return res.status(400).json({
-        message: "Slug is required",
-      });
-    }
-
-    const result =
-      updateRoadmapSchema.safeParse(req.body);
-
-    if (!result.success) {
-      return res.status(400).json({
-        errors: result.error.flatten(),
-      });
-    }
-
-    const roadmap =
-      await prisma.roadmap.findUnique({
-        where: { slug },
-      });
-
-    if (!roadmap) {
-      return res.status(404).json({
-        message: "Roadmap not found",
-      });
-    }
-
-    const user = req.user;
-    if (!user || roadmap.ownerUserId !== user.id) {
-      return res.status(403).json({
-        message: "Unauthorized",
-      });
-    }
-
-    const updatedRoadmap =
-      await prisma.roadmap.update({
-        where: { slug },
-        data: result.data,
-      });
-
-    clearCache(`roadmap:structure:${slug}`);
-    clearCache(`roadmap:/api/roadmaps/${slug}`);
-
-    return res.json({
-      roadmap: updatedRoadmap,
-    });
-  } catch (error) {
-    next(error);
   }
 }
 
@@ -751,7 +637,7 @@ export async function postAiGenerate(req: Request, res: Response, next: NextFunc
       });
 
       return created;
-    }, { timeout: 30000 });
+    });
 
     // 4. Schedule day-10 follow-up
     const sendAt = new Date(enrollment.startDate.getTime() + 10 * 24 * 60 * 60 * 1000);
@@ -853,19 +739,12 @@ export async function postAiGenerate(req: Request, res: Response, next: NextFunc
     // always hits the DB and returns the freshly created roadmap, not a
     // stale cache entry from a previous 404 or an earlier roadmap at the
     // same URL pattern.
-    clearCache(`roadmap:structure:${slug}`);
     clearCache(`roadmap:/api/roadmaps/${slug}`);
 
     res.status(201).json({
       message: "Roadmap generated",
       slug: enrollment.roadmap.slug,
       enrollmentId: enrollment.id,
-      title: generated.title,
-      sections: sections.map((s) => ({
-        title: s.title,
-        estimatedHours: s.topics.reduce((sum, t) => sum + t.estimatedHours, 0),
-      })),
-      totalHours: generated.estimatedHours,
     });
   } catch (err) {
     next(err);
@@ -926,262 +805,6 @@ export async function downloadCertificate(req: Request, res: Response, next: Nex
       `attachment; filename="${enrollment.roadmap.slug}-certificate${suffix}.pdf"`,
     );
     res.send(pdfBuffer);
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getPublicCertificateMeta(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const slug = req.params.slug;
-
-    const shareToken = typeof req.params.shareToken === "string" ? req.params.shareToken : undefined;
-
-    const parsed = roadmapSlugParam.safeParse({
-      slug,
-    });
-
-    const shareTokenParsed = shareTokenSchema.safeParse(shareToken);
-
-    if (!parsed.success || !shareTokenParsed.success) {     
-       validationError(
-        res,
-        parsed.success
-          ? { shareToken: ["Invalid share token"] }
-          : parsed.error.flatten().fieldErrors,
-      );
-      return;
-    }
-
-    const enrollment = await prisma.roadmapEnrollment.findFirst({
-      where: {
-        shareToken: shareTokenParsed.data,
-        roadmap: {
-          slug: parsed.data.slug,
-        },
-      },
-      include: {
-        roadmap: true,
-        user: {
-          select: {
-            name: true,
-          },
-        },
-        topicProgress: {
-          where: {
-            status: "COMPLETED",
-          },
-          orderBy: {
-            completedAt: "desc",
-          },
-        },
-      },
-    });
-
-    if (!enrollment) {
-      res.status(404).json({
-        message: "Certificate not found",
-      });
-      return;
-    }
-
-    const completedTopics = enrollment.topicProgress.filter(
-      (p) => p.status === "COMPLETED" && p.completedAt,
-    );
-
-    const percentComplete =
-      enrollment.roadmap.topicCount === 0
-        ? 0
-        : Math.round(
-            (completedTopics.length /
-              enrollment.roadmap.topicCount) *
-              100,
-          );
-
-    if (percentComplete < 100) {
-      res.status(403).json({
-        message: "Certificate unavailable",
-      });
-      return;
-    }
-
-    const latestCompletion =
-      completedTopics[0]?.completedAt ?? new Date();
-
-    res.json({
-      userName: enrollment.user.name ?? "Learner",
-      roadmapTitle: enrollment.roadmap.title,
-      roadmapSlug: enrollment.roadmap.slug,
-      completedAt: latestCompletion,
-      certificateUrl: `/api/roadmaps/certificates/${enrollment.roadmap.slug}/${enrollment.shareToken}`,
-      shareUrl: `/learn/roadmaps/certificates/${enrollment.roadmap.slug}/${enrollment.shareToken}`,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getPublicCertificate(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const slug = req.params.slug;
-
-    const shareToken = typeof req.params.shareToken === "string" ? req.params.shareToken : undefined;
-
-    const parsed = roadmapSlugParam.safeParse({
-      slug: slug,
-    });
-
-    const shareTokenParsed = shareTokenSchema.safeParse(shareToken);
-
-    if (!parsed.success || !shareTokenParsed.success) {     
-       validationError(
-        res,
-        parsed.success
-          ? { shareToken: ["Invalid share token"] }
-          : parsed.error.flatten().fieldErrors,
-      );
-      return;
-    }
-
-    const enrollment = await prisma.roadmapEnrollment.findFirst({
-      where: {
-        shareToken: shareTokenParsed.data,
-        roadmap: {
-          slug: parsed.data.slug,
-        },
-      },
-      include: {
-        roadmap: {
-          include: {
-            sections: {
-              include: {
-                topics: true,
-              },
-            },
-          },
-        },
-        topicProgress: true,
-        user: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!enrollment) {
-      res.status(404).json({
-        message: "Certificate not found",
-      });
-      return;
-    }
-
-    // Only allow completed roadmaps
-    const summary = summarizeProgress(enrollment);
-
-    if (summary.percentComplete < 100) {
-      res.status(403).json({
-        message: "Certificate unavailable until roadmap completion",
-      });
-      return;
-    }
-
-    const completedTopics = enrollment.topicProgress
-      .filter((p) => p.status === "COMPLETED" && p.completedAt)
-      .sort(
-        (a, b) =>
-          b.completedAt!.getTime() - a.completedAt!.getTime()
-      );
-
-    const actualCompletedAt =
-      completedTopics[0]?.completedAt ?? new Date();
-
-    const pdfBuffer = await generateCertificatePdf({
-      theme: "light",
-      userName: enrollment.user.name ?? "Learner",
-      roadmapTitle: enrollment.roadmap.title,
-      completedAt: actualCompletedAt,
-    });
-
-    res.setHeader("Content-Type", "application/pdf");
-
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${enrollment.roadmap.slug}-certificate.pdf"`,
-    );
-
-    res.send(pdfBuffer);
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getMyCertificates(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const enrollments = await prisma.roadmapEnrollment.findMany({
-      where: {
-        userId: req.user!.id,
-      },
-      include: {
-        roadmap: true,
-        topicProgress: true,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-    });
-
-    const certificates = enrollments
-      .map((enrollment) => {
-        const completedTopics = enrollment.topicProgress.filter(
-          (p) => p.status === "COMPLETED" && p.completedAt
-        );
-
-        const percentComplete =
-          enrollment.roadmap.topicCount === 0
-            ? 0
-            : Math.round(
-                (completedTopics.length /
-                  enrollment.roadmap.topicCount) *
-                  100,
-              );
-
-        if (percentComplete < 100) {
-          return null;
-        }
-
-        const latestCompletion =
-          completedTopics.sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0]
-            ?.completedAt ?? new Date();
-
-        return {
-          shareToken: enrollment.shareToken,
-          roadmapTitle: enrollment.roadmap.title,
-          roadmapSlug: enrollment.roadmap.slug,
-          completedAt: latestCompletion,
-          certificateUrl:
-            `/api/roadmaps/me/enrollments/${enrollment.id}/certificate`,
-          shareUrl:
-            `/learn/roadmaps/certificates/${enrollment.roadmap.slug}/${enrollment.shareToken}`,
-        };
-      })
-      .filter(Boolean);
-
-    res.json({
-      certificates,
-    });
   } catch (err) {
     next(err);
   }
@@ -1342,98 +965,14 @@ export async function postRegenerateSection(req: Request, res: Response, next: N
           },
         },
       });
-    }, { timeout: 30000 });
+    });
 
     // FIX: Bust the cache for this roadmap so section changes are visible immediately
-    clearCache(`roadmap:structure:${slug}`);
     clearCache(`roadmap:/api/roadmaps/${slug}`);
 
     res.json({
       message: "Section regenerated successfully",
       section: updatedSection,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-// ─── Share ────────────────────────────────────────────────────────────────────
-export async function toggleShare(req: Request, res: Response, next: NextFunction) {
-  try {
-    const parsed = roadmapSlugParam.safeParse(req.params);
-    if (!parsed.success) {
-      validationError(res, parsed.error.flatten().fieldErrors);
-      return;
-    }
-
-    const slug = parsed.data.slug;
-    const userId = req.user!.id;
-
-    const roadmap = await prisma.roadmap.findFirst({
-      where: { slug, ownerUserId: userId },
-    });
-
-    if (!roadmap) {
-      res.status(403).json({ message: "Not authorized or roadmap not found" });
-      return;
-    }
-
-    if (!roadmap.isAiGenerated) {
-      res.status(400).json({ message: "Only AI-generated roadmaps can be shared" });
-      return;
-    }
-
-    const updated = await prisma.roadmap.update({
-      where: { slug },
-      data: { isPubliclyShared: !roadmap.isPubliclyShared },
-    });
-
-    // Bust cache so share state is immediately reflected
-    clearCache(`roadmap:structure:${slug}`);
-    clearCache(`roadmap:/api/roadmaps/${slug}`);
-
-    res.json({
-      success: true,
-      isPubliclyShared: updated.isPubliclyShared,
-      shareUrl: `https://internhack.xyz/roadmaps/${slug}`,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-// ─── AI Usage Stats ────────────────────────────────────────────────────────
-export async function getAiUsage(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = req.user!.id;
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { subscriptionPlan: true, subscriptionStatus: true, subscriptionEndDate: true },
-    });
-
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
-      return;
-    }
-
-    const tier = getPlanTier(user.subscriptionPlan, user.subscriptionStatus, user.subscriptionEndDate);
-    const limit = MONTHLY_LIMITS["ROADMAP_GENERATION"]?.[tier] ?? 5;
-
-    const startOfWindow = new Date();
-    startOfWindow.setUTCDate(1);
-    startOfWindow.setUTCHours(0, 0, 0, 0);
-
-    const used = await prisma.usageLog.count({
-      where: {
-        userId,
-        action: "ROADMAP_GENERATION",
-        createdAt: { gte: startOfWindow },
-      },
-    });
-
-    res.json({
-      used,
-      limit,
-      isPro: tier === "PREMIUM",
     });
   } catch (err) {
     next(err);
