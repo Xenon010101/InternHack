@@ -10,7 +10,8 @@ import {
   ArrowUpRight,
   MessageSquare,
 } from "lucide-react";
-import { sections, questions } from "./data";
+import { sections, loadSectionQuestions } from "./data";
+import type { InterviewQuestion } from "./data/types";
 
 import { SEO } from "../../../components/SEO";
 import { CodeBlock } from "../../../components/ui/CodeBlock";
@@ -81,10 +82,25 @@ export default function InterviewQuestionPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [completed, setCompleted] = useState(false);
+  const [sectionQuestions, setSectionQuestions] = useState<InterviewQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
 
-  const section = useMemo( () => sections.find((s) => s.id === sectionSlug) || null, [sectionSlug]);
-  const sectionQuestions = useMemo(() => { return questions.filter((q) => q.sectionId === sectionSlug).sort((a, b) => a.orderIndex - b.orderIndex);}, [sectionSlug]);
-  const question = useMemo(() => { return sectionQuestions.find((q) => q.id === questionId) || null;}, [sectionQuestions, questionId]);
+  const section = useMemo(() => sections.find((s) => s.id === sectionSlug) || null, [sectionSlug]);
+
+  useEffect(() => {
+    if (!sectionSlug) return;
+    setQuestionsLoading(true);
+    loadSectionQuestions(sectionSlug)
+      .then((data) => {
+        setSectionQuestions(data.sort((a, b) => a.orderIndex - b.orderIndex));
+      })
+      .catch(console.error)
+      .finally(() => setQuestionsLoading(false));
+  }, [sectionSlug]);
+
+  const question = useMemo(() => {
+    return sectionQuestions.find((q) => q.id === questionId) || null;
+  }, [sectionQuestions, questionId]);
 
   const currentIndex = question
     ? sectionQuestions.findIndex((q) => q.id === question.id)
@@ -211,6 +227,14 @@ export default function InterviewQuestionPage() {
 
   if (section && !section.freeTier && !isAuthenticated) {
     return <Navigate to={basePath} replace />;
+  }
+
+  if (questionsLoading) {
+    return (
+      <div className="relative max-w-3xl mx-auto py-24 px-6 text-center">
+        <div className="animate-spin w-6 h-6 border-2 border-stone-400 border-t-transparent rounded-full mx-auto" />
+      </div>
+    );
   }
 
   if (!question || !section) {

@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router";
 import { motion } from "framer-motion";
 import { CheckCircle2, ArrowUpRight } from "lucide-react";
-import { sections, questions } from "./data";
+import { sections, loadSectionQuestions } from "./data";
+import type { InterviewQuestion } from "./data/types";
 import { SEO } from "../../../components/SEO";
 import { canonicalUrl } from "../../../lib/seo.utils";
 import { useAuthStore } from "../../../lib/auth.store";
@@ -39,8 +40,10 @@ export default function InterviewSectionPage() {
   const [activeDifficulty, setActiveDifficulty] = useState("All");
   const [selectedCompany, setSelectedCompany] = useState("All");
   const [sortBy, setSortBy] = useState("frequency");
+  const [sectionQuestions, setSectionQuestions] = useState<InterviewQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
 
-  const { data: progressData, isLoading } = useQuery({
+  const { data: progressData, isLoading: progressLoading } = useQuery({
     queryKey: ["interview-progress"],
     queryFn: () => api.get("/interview-progress").then((r) => r.data),
     enabled: !!isAuthenticated,
@@ -50,10 +53,16 @@ export default function InterviewSectionPage() {
 
   const section = sections.find((s) => s.id === sectionSlug);
 
-  const sectionQuestions = useMemo(
-    () => questions.filter((q) => q.sectionId === sectionSlug).sort((a, b) => a.orderIndex - b.orderIndex),
-    [sectionSlug],
-  );
+  useEffect(() => {
+    if (!sectionSlug) return;
+    setQuestionsLoading(true);
+    loadSectionQuestions(sectionSlug)
+      .then((data) => {
+        setSectionQuestions(data.sort((a, b) => a.orderIndex - b.orderIndex));
+      })
+      .catch(console.error)
+      .finally(() => setQuestionsLoading(false));
+  }, [sectionSlug]);
 
   const availableCompanies = useMemo(() => {
     const companies = new Set<string>();
@@ -188,7 +197,7 @@ export default function InterviewSectionPage() {
           <ProgressBar
             value={completedCount}
             max={sectionQuestions.length}
-            label={isLoading ? "syncing progress" : "section progress"}
+            label={progressLoading ? "syncing progress" : "section progress"}
           />
         </motion.div>
 
@@ -267,7 +276,11 @@ export default function InterviewSectionPage() {
         </div>
 
         {/* Question list */}
-        {filteredAndSortedQuestions.length === 0 ? (
+        {questionsLoading ? (
+          <div className="py-20 text-center">
+            <div className="animate-spin w-6 h-6 border-2 border-stone-400 border-t-transparent rounded-full mx-auto" />
+          </div>
+        ) : filteredAndSortedQuestions.length === 0 ? (
           <div className="py-20 text-center border border-dashed border-stone-300 dark:border-white/10 rounded-md">
             <p className="text-sm text-stone-600 dark:text-stone-400">
               No questions match your filters.

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "framer-motion";
-import { CheckCircle2, ArrowUpRight, Lock } from "lucide-react";
-import { sections, questions } from "./data";
+import { ArrowUpRight, Lock } from "lucide-react";
+import { sections } from "./data";
 import type { InterviewProgress } from "./data/types";
 import { SEO } from "../../../components/SEO";
 import { canonicalUrl, SITE_URL } from "../../../lib/seo.utils";
@@ -117,23 +117,22 @@ export default function InterviewLessonsPage() {
 
   const sectionStats = useMemo(() => {
     return sections.map((section) => {
-      const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
-      const completed = sectionQuestions.filter((q) => progress[q.id]?.completed).length;
-      const total = sectionQuestions.length;
-      const easy = sectionQuestions.filter((q) => q.difficulty === "Beginner").length;
-      const medium = sectionQuestions.filter((q) => q.difficulty === "Intermediate").length;
-      const hard = sectionQuestions.filter((q) => q.difficulty === "Advanced").length;
-      return { ...section, completed, total, easy, medium, hard };
+      const total = section.questionCount;
+      const completed = Object.values(progress).filter(
+        (p) => p.completed
+      ).length;
+      return { ...section, completed, total };
     });
   }, [progress]);
+
 
   const visibleSections = useMemo(() => {
     if (diffFilter === "all") return sectionStats;
     return sectionStats.filter((s) => s.level === diffFilter);
   }, [sectionStats, diffFilter]);
 
-  const totalCompleted = Object.values(progress as InterviewProgress).filter((p) => p.completed).length;
-  const totalQuestions = questions.length;
+  const totalCompleted = Object.values(progress).filter((p) => p.completed).length;
+  const totalQuestions = sections.reduce((sum, s) => sum + s.questionCount, 0);
   const overallPct = totalQuestions > 0 ? Math.round((totalCompleted / totalQuestions) * 100) : 0;
 
   return (
@@ -287,9 +286,7 @@ export default function InterviewLessonsPage() {
             </div>
           ) : (
             visibleSections.map((section, idx) => {
-            const pct = section.total > 0 ? Math.round((section.completed / section.total) * 100) : 0;
             const basePath = "/learn/interview";
-            const isComplete = pct === 100 && section.total > 0;
             const isLocked = !section.freeTier && !isAuthenticated;
 
             const cardClass =
@@ -297,11 +294,6 @@ export default function InterviewLessonsPage() {
 
             const body = (
               <>
-                {isComplete && (
-                  <span className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-widest text-lime-600 dark:text-lime-400 inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3 h-3" /> complete
-                  </span>
-                )}
                 {isLocked && (
                   <span className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5">
                     <Lock className="w-3 h-3" /> locked
@@ -333,48 +325,9 @@ export default function InterviewLessonsPage() {
                   </div>
                 </div>
 
-                {!isLocked && section.total > 0 && (
-                  <div className="mb-3">
-                    <div className="w-full h-1 bg-stone-100 dark:bg-stone-800 overflow-hidden rounded-sm">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.6, delay: 0.1 + idx * 0.03 }}
-                        className={`h-full ${isComplete ? "bg-lime-400" : pct > 0 ? "bg-stone-900 dark:bg-stone-50" : "bg-stone-200 dark:bg-stone-700"}`}
-                      />
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex flex-wrap gap-1.5">
-                  <MetaChip className={isComplete ? "text-green-600 dark:text-green-400 border-green-300 dark:border-green-900/60" : ""}>
-                  {isLocked ? `${section.total} questions` : (<span className="inline-flex items-center gap-1"> {isComplete && <CheckCircle2 className="w-3 h-3" />}{section.completed} / {section.total} answered</span> )}
-                  </MetaChip>
+                  <MetaChip>{section.total} questions</MetaChip>
                   <MetaChip className={LEVEL_STYLE[section.level]}>{section.level}</MetaChip>
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-2 mb-4 flex-wrap">
-                  {section.easy > 0 && (
-                    <span className={`text-[9px] font-mono uppercase tracking-widest
-                      px-1.5 py-0.5 rounded border transition-all duration-300
-                      ${DIFF_STYLE["Beginner"]}`}>
-                      {section.easy} easy
-                    </span>
-                  )}
-                  {section.medium > 0 && (
-                    <span className={`text-[9px] font-mono uppercase tracking-widest
-                      px-1.5 py-0.5 rounded border transition-all duration-300
-                      ${DIFF_STYLE["Intermediate"]}`}>
-                      {section.medium} medium
-                    </span>
-                  )}
-                  {section.hard > 0 && (
-                    <span className={`text-[9px] font-mono uppercase tracking-widest
-                      px-1.5 py-0.5 rounded border transition-all duration-300
-                      ${DIFF_STYLE["Advanced"]}`}>
-                      {section.hard} hard
-                    </span>
-                  )}
                 </div>
 
                 <div className="mt-auto flex items-center justify-between pt-3 border-t border-stone-100 dark:border-white/5">

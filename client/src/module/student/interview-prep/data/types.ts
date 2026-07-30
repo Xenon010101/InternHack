@@ -5,6 +5,7 @@ export interface InterviewSection {
   orderIndex: number;
   level: "Beginner" | "Intermediate" | "Advanced";
   freeTier: boolean;
+  questionCount: number;
 }
 
 export interface CodeExample {

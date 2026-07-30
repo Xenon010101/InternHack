@@ -8,6 +8,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 0,
     level: "Intermediate",
     freeTier: true,
+    questionCount: 50,
   },
   {
     id: "react-interview",
@@ -16,6 +17,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 1,
     level: "Intermediate",
     freeTier: true,
+    questionCount: 50,
   },
   {
     id: "nodejs-interview",
@@ -24,6 +26,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 2,
     level: "Intermediate",
     freeTier: true,
+    questionCount: 30,
   },
   {
     id: "typescript-interview",
@@ -32,6 +35,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 3,
     level: "Intermediate",
     freeTier: true,
+    questionCount: 30,
   },
   {
     id: "python-interview",
@@ -40,6 +44,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 4,
     level: "Intermediate",
     freeTier: true,
+    questionCount: 50,
   },
   {
     id: "sql-database-interview",
@@ -48,6 +53,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 5,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 3,
   },
   {
     id: "system-design-interview",
@@ -56,6 +62,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 6,
     level: "Advanced",
     freeTier: false,
+    questionCount: 30,
   },
   {
     id: "behavioral-interview",
@@ -64,6 +71,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 7,
     level: "Beginner",
     freeTier: false,
+    questionCount: 3,
   },
   {
     id: "html-css-interview",
@@ -72,6 +80,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 8,
     level: "Beginner",
     freeTier: false,
+    questionCount: 30,
   },
   {
     id: "git-devops-interview",
@@ -80,6 +89,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 9,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 30,
   },
   {
     id: "fastapi-interview",
@@ -88,6 +98,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 10,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 30,
   },
   {
     id: "docker-containers",
@@ -96,6 +107,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 11,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "kubernetes-orchestration",
@@ -104,6 +116,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 12,
     level: "Advanced",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "aws-cloud-fundamentals",
@@ -112,6 +125,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 13,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "redis-caching",
@@ -120,6 +134,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 14,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "web-security",
@@ -128,6 +143,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 15,
     level: "Intermediate",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "database-design",
@@ -136,6 +152,7 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 16,
     level: "Advanced",
     freeTier: false,
+    questionCount: 51,
   },
   {
     id: "open-source-interview",
@@ -144,5 +161,6 @@ export const interviewSections: InterviewSection[] = [
     orderIndex: 17,
     level: "Beginner",
     freeTier: true,
+    questionCount: 9,
   },
 ];
