@@ -35,6 +35,12 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function sanitizeUrl(url: string): string {
+  if (/^(https?:|mailto:|ftp:)/i.test(url)) return url;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(url)) return url;
+  return "#";
+}
+
 // ─── Simple markdown preview renderer ───────────────────────────
 function renderPreview(md: string): string {
   let html = md;
@@ -72,10 +78,10 @@ function renderPreview(md: string): string {
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
   // Images
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="rounded-lg my-4 max-w-full" />');
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => `<img src="${sanitizeUrl(src)}" alt="${alt}" class="rounded-lg my-4 max-w-full" />`);
 
   // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-400 underline">$1</a>');
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => `<a href="${sanitizeUrl(url)}" class="text-blue-400 underline">${text}</a>`);
 
   // Horizontal rule
   html = html.replace(/^---$/gm, '<hr class="my-8 border-gray-700" />');

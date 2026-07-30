@@ -56,6 +56,12 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function sanitizeUrl(url: string): string {
+  if (/^(https?:|mailto:|ftp:)/i.test(url)) return url;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(url)) return url;
+  return "#";
+}
+
 // ─────────────────────────────────────────────────────────────
 // Markdown → HTML
 // ─────────────────────────────────────────────────────────────
@@ -124,10 +130,10 @@ function markdownToHtml(md: string): string {
   // Images
   html = html.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
-    `
+    (_match, alt, src) => `
       <img
-        src="$2"
-        alt="$1"
+        src="${sanitizeUrl(src)}"
+        alt="${alt}"
         class="rounded-2xl my-8 w-full border border-stone-200 dark:border-white/10"
       />
     `
@@ -136,14 +142,14 @@ function markdownToHtml(md: string): string {
   // Links
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    `
+    (_match, text, url) => `
       <a
-        href="$2"
+        href="${sanitizeUrl(url)}"
         target="_blank"
         rel="noopener noreferrer"
         class="text-lime-700 dark:text-lime-400 underline underline-offset-4 hover:text-lime-900 dark:hover:text-lime-300 transition-colors"
       >
-        $1
+        ${text}
       </a>
     `
   );
