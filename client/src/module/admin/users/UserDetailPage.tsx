@@ -146,27 +146,27 @@ export default function UserDetailPage() {
                 <h1 className="text-2xl font-bold text-white">{user.name}</h1>
                 {user.bio && <p className="text-sm text-gray-400 mt-1 max-w-lg">{user.bio}</p>}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getRoleBadge(user.role)}`}>
+                  <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${getRoleBadge(user.role)}`}>
                     {user.role}
                   </span>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.isActive ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
+                  <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${user.isActive ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
                     {user.isActive ? "Active" : "Inactive"}
                   </span>
                   {user.isVerified && (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-900/50 text-blue-400 flex items-center gap-1">
+                    <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-900/50 text-blue-400 flex items-center gap-1">
                       <CheckCircle className="w-3 h-3" /> Verified
                     </span>
                   )}
                   {!user.isVerified && (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-400 flex items-center gap-1">
+                    <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 flex items-center gap-1">
                       <XCircle className="w-3 h-3" /> Unverified
                     </span>
                   )}
                   {user.isProfilePublic && (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-cyan-900/50 text-cyan-400">Public Profile</span>
+                    <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-900/50 text-cyan-400">Public Profile</span>
                   )}
                   {user.adminProfile && (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-900/50 text-indigo-400">
+                    <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-900/50 text-indigo-400">
                       {user.adminProfile.tier}
                     </span>
                   )}

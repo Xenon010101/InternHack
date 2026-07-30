@@ -46,7 +46,7 @@ export function GrantsSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-6">
             <Award className="w-3.5 h-3.5" />
             Web3 Grants
           </div>

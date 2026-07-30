@@ -684,7 +684,7 @@ function EnrollmentCard({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label={`${r.title} progress`}
-              className="h-1 w-full bg-stone-100 dark:bg-stone-800 overflow-hidden rounded-full"
+              className="h-1 w-full bg-stone-100 dark:bg-stone-800 overflow-hidden rounded-md"
             >
               <motion.div
                 className="h-full bg-lime-500"
@@ -875,7 +875,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-widest transition-all ${
+      className={`px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-widest transition-all ${
         active
           ? "bg-lime-400 text-stone-950 font-bold border border-lime-500 shadow-sm"
           : "bg-white dark:bg-stone-900 text-stone-500 hover:text-stone-900 dark:hover:text-stone-300 border border-stone-200 dark:border-white/10"

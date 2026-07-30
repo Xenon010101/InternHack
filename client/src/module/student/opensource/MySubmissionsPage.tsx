@@ -71,7 +71,7 @@ export default function MySubmissionsPage() {
             <Icon className="w-3.5 h-3.5" />
             {label}
             {counts[key] > 0 && (
-              <span className="ml-1 text-[10px] font-mono bg-stone-200 dark:bg-stone-700 px-1.5 py-0.5 rounded-full">
+              <span className="ml-1 text-[10px] font-mono bg-stone-200 dark:bg-stone-700 px-1.5 py-0.5 rounded-md">
                 {counts[key]}
               </span>
             )}
@@ -126,19 +126,19 @@ export default function MySubmissionsPage() {
                 </div>
                 <div className="shrink-0">
                   {req.status === "APPROVED" && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-1 rounded-md">
                       <CheckCircle2 className="w-3 h-3" />
                       Approved
                     </span>
                   )}
                   {req.status === "PENDING" && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded-md">
                       <Clock className="w-3 h-3" />
                       Pending
                     </span>
                   )}
                   {req.status === "REJECTED" && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-400 px-2 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-400 px-2 py-1 rounded-md">
                       <XCircle className="w-3 h-3" />
                       Rejected
                     </span>

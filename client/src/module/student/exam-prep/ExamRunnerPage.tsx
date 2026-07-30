@@ -214,7 +214,7 @@ export default function ExamRunnerPage({ mode }: { mode: Mode }) {
                       <span className="font-medium text-gray-700 dark:text-gray-300 capitalize">{topic.replace(/-/g, " ")}</span>
                       <span className="tabular-nums text-gray-500">{s.correct}/{s.total}</span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
                       <div
                         className={`h-full ${p >= 70 ? "bg-green-500" : p >= 40 ? "bg-amber-500" : "bg-red-500"}`}
                         style={{ width: `${p}%` }}
@@ -272,7 +272,7 @@ export default function ExamRunnerPage({ mode }: { mode: Mode }) {
                     {q.question}
                   </p>
                   {userAns === undefined ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 shrink-0">Skipped</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 shrink-0">Skipped</span>
                   ) : isCorrect ? (
                     <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                   ) : (
@@ -337,7 +337,7 @@ export default function ExamRunnerPage({ mode }: { mode: Mode }) {
             Submit
           </button>
         </div>
-        <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-3">
+        <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden mt-3">
           <motion.div className="h-full bg-indigo-500" animate={{ width: `${pct}%` }} />
         </div>
         {tabSwitches > 0 && (
@@ -357,10 +357,10 @@ export default function ExamRunnerPage({ mode }: { mode: Mode }) {
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+              <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                 {current.topic.replace(/-/g, " ")}
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
+              <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
                 {current.difficulty}
               </span>
             </div>

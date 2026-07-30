@@ -326,7 +326,7 @@ const fetchDetail = useCallback(async (signal?: AbortSignal) => {
     );
     return (
       <span
-        className={`text-sm font-semibold px-3 py-1 rounded-full ${
+        className={`text-sm font-semibold px-3 py-1 rounded-md ${
           pct >= 70
             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
             : pct >= 40
@@ -343,7 +343,7 @@ const fetchDetail = useCallback(async (signal?: AbortSignal) => {
             {verifiedSkills.map((vs) => (
               <span
                 key={vs.skillName}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full text-sm font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-sm font-medium"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 {vs.skillName}
@@ -401,7 +401,7 @@ const fetchDetail = useCallback(async (signal?: AbortSignal) => {
                     {sub.round?.name || `Round ${i + 1}`}
                   </span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${getRoundStatusColor(sub.status)}`}
+                    className={`text-xs px-2 py-0.5 rounded-md ${getRoundStatusColor(sub.status)}`}
                   >
                     {sub.status}
                   </span>

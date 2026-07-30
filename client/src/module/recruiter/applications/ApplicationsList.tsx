@@ -175,7 +175,7 @@ export default function ApplicationsList() {
                   <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
                   <div className="h-3 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
                 </div>
-                <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
                 <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
                 <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
                 <div className="flex gap-2">
@@ -230,7 +230,7 @@ export default function ApplicationsList() {
                             value={app.status}
                             disabled={updatingId === app.id}
                             onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                            className={`text-xs px-2.5 py-1 rounded-full font-medium border-0 ${getStatusColor(app.status)} ${updatingId === app.id ? "opacity-50 cursor-not-allowed" : ""}`}>
+                            className={`text-xs px-2.5 py-1 rounded-md font-medium border-0 ${getStatusColor(app.status)} ${updatingId === app.id ? "opacity-50 cursor-not-allowed" : ""}`}>
                             <option value="APPLIED">Applied</option>
                             <option value="IN_PROGRESS">In Progress</option>
                             <option value="SHORTLISTED">Shortlisted</option>

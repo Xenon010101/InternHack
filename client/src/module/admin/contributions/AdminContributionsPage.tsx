@@ -96,7 +96,7 @@ export default function AdminContributionsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[contribution.type] ?? "bg-gray-800 text-gray-400"}`}>
+                    <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium ${TYPE_COLORS[contribution.type] ?? "bg-gray-800 text-gray-400"}`}>
                       {TYPE_LABELS[contribution.type] ?? contribution.type}
                     </span>
                     <p className="text-sm text-gray-400">

@@ -46,7 +46,7 @@ export default function CategoryPills({
               key={category}
               whileTap={{ scale: 0.96 }}
               onClick={() => onChange(category)}
-              className={`relative whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 border ${
+              className={`relative whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all duration-200 border ${
                 active
                   ? "bg-stone-950 dark:bg-white text-white dark:text-stone-950 border-stone-950 dark:border-white"
                   : "border-stone-200 dark:border-white/10 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:border-lime-400/50 hover:text-stone-950 dark:hover:text-white"

@@ -191,11 +191,11 @@ export default function AdminBlogPage() {
                   </td>
                   <td className="px-4 py-3">
                     {post.status === "PUBLISHED" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-md">
                         <Globe className="w-3 h-3" /> Published
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-full">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-md">
                         <FilePen className="w-3 h-3" /> Draft
                       </span>
                     )}

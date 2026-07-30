@@ -84,11 +84,11 @@ export default function AdminCompaniesPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-white truncate">{company.name}</p>
                     {company.isApproved ? (
-                      <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-md flex items-center gap-1">
                         <Eye className="w-3 h-3" /> Approved
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-md flex items-center gap-1">
                         <EyeOff className="w-3 h-3" /> Pending
                       </span>
                     )}

@@ -462,7 +462,7 @@ export default function AdminAptitudePage() {
                     {q.question.replace(/<[^>]*>/g, "").slice(0, 100)}
                   </span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${q.difficulty === "EASY" ? "bg-green-900/50 text-green-400" : q.difficulty === "HARD" ? "bg-red-900/50 text-red-400" : "bg-yellow-900/50 text-yellow-400"}`}
+                    className={`text-xs px-2 py-0.5 rounded-md ${q.difficulty === "EASY" ? "bg-green-900/50 text-green-400" : q.difficulty === "HARD" ? "bg-red-900/50 text-red-400" : "bg-yellow-900/50 text-yellow-400"}`}
                   >
                     {q.difficulty}
                   </span>
@@ -547,7 +547,7 @@ export default function AdminAptitudePage() {
                         {q.companies.map((c) => (
                           <span
                             key={c}
-                            className="text-xs px-2 py-0.5 bg-gray-800 rounded-full text-gray-300"
+                            className="text-xs px-2 py-0.5 bg-gray-800 rounded-md text-gray-300"
                           >
                             {c}
                           </span>

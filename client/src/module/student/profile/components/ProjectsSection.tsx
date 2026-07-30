@@ -338,7 +338,7 @@ export function ProjectsSection({
               {draft.techStack.map((t, i) => (
                 <span
                   key={i}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-full border border-stone-200 dark:border-white/10"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-md border border-stone-200 dark:border-white/10"
                 >
                   {t}
                   <Button

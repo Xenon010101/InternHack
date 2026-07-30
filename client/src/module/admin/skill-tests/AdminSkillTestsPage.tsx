@@ -286,14 +286,14 @@ export default function AdminSkillTestsPage() {
                     {test.description && <div className="text-xs text-gray-500 truncate max-w-xs">{test.description}</div>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${test.difficulty === "BEGINNER" ? "bg-green-900/50 text-green-400" : test.difficulty === "ADVANCED" ? "bg-red-900/50 text-red-400" : "bg-yellow-900/50 text-yellow-400"}`}>
+                    <span className={`text-xs px-2.5 py-1 rounded-md font-medium ${test.difficulty === "BEGINNER" ? "bg-green-900/50 text-green-400" : test.difficulty === "ADVANCED" ? "bg-red-900/50 text-red-400" : "bg-yellow-900/50 text-yellow-400"}`}>
                       {test.difficulty}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300">{test._count?.questions ?? 0}</td>
                   <td className="px-4 py-3 text-sm text-gray-300">{test._count?.attempts ?? 0}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleToggle(test.id, !test.isActive)} className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${test.isActive ? "bg-green-900/50 text-green-400 hover:bg-green-900/70" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+                    <button onClick={() => handleToggle(test.id, !test.isActive)} className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${test.isActive ? "bg-green-900/50 text-green-400 hover:bg-green-900/70" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
                       {test.isActive ? "Active" : "Inactive"}
                     </button>
                   </td>

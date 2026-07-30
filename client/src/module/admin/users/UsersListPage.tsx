@@ -126,12 +126,12 @@ export default function UsersListPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-400">{user.email}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getRoleBadge(user.role)}`}>
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${getRoleBadge(user.role)}`}>
                         {user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.isActive ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${user.isActive ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
                         {user.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>

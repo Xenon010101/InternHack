@@ -378,7 +378,7 @@ export default function CandidateImportPage() {
                     {r.message && (
                       <p className="text-xs text-gray-400 dark:text-gray-500 text-right flex-shrink-0 max-w-[200px] truncate">{r.message}</p>
                     )}
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                       r.status === "success"
                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                         : r.status === "duplicate"

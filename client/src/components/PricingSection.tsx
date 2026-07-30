@@ -197,7 +197,7 @@ className={cn(
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-white text-xs font-semibold shadow-lg",
+                        "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-white text-xs font-semibold shadow-lg",
                         plan.badge.color,
                         plan.badge.shadow
                       )}

@@ -91,7 +91,7 @@ export default function AdminDashboard() {
                     <p className="font-medium text-white text-sm sm:text-base truncate">{user.name}</p>
                     <p className="text-xs sm:text-sm text-gray-400 truncate">{user.email}</p>
                   </div>
-                  <span className={`inline-block px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${getRoleBadge(user.role)}`}>
+                  <span className={`inline-block px-2 sm:px-2.5 py-1 rounded-md text-xs font-medium shrink-0 ${getRoleBadge(user.role)}`}>
                     {user.role}
                   </span>
                 </Link>
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                     <p className="text-xs sm:text-sm text-gray-400 truncate">{job.company} - {job.recruiter.name}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className={`inline-block px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium ${getJobStatusBadge(job.status)}`}>
+                    <span className={`inline-block px-2 sm:px-2.5 py-1 rounded-md text-xs font-medium ${getJobStatusBadge(job.status)}`}>
                       {job.status}
                     </span>
                     <p className="text-xs text-gray-500 mt-1">{job._count.applications} apps</p>

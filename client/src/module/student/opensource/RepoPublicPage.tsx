@@ -145,7 +145,7 @@ export default function RepoPublicPage() {
       <div className="min-h-screen bg-[#fafafa] dark:bg-gray-950">
         <Navbar />
         <div className="max-w-4xl mx-auto px-6 py-24 text-center">
-          <div className="inline-flex items-center justify-center p-4 bg-red-50 dark:bg-red-900/10 rounded-full mb-6">
+          <div className="inline-flex items-center justify-center p-4 bg-red-50 dark:bg-red-900/10 rounded-md mb-6">
             <AlertCircle className="w-12 h-12 text-red-500" />
           </div>
           <h1 className="text-3xl font-bold text-stone-900 dark:text-white mb-4">Repo Not Found</h1>
@@ -249,7 +249,7 @@ export default function RepoPublicPage() {
                 <div className="divide-y divide-stone-100 dark:divide-white/5">
                   {loadingIssues ? (
                     <div className="p-12 text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary mx-auto mb-4" />
+                      <div className="animate-spin rounded-md h-8 w-8 border-t-2 border-primary mx-auto mb-4" />
                       <p className="text-stone-500 text-sm">Fetching live issues...</p>
                     </div>
                   ) : issues.length > 0 ? (
@@ -277,7 +277,7 @@ export default function RepoPublicPage() {
                           {issue.labels.slice(0, 2).map((label) => (
                             <span
                               key={label.name}
-                              className="text-xs px-2 py-0.5 rounded-full font-medium"
+                              className="text-xs px-2 py-0.5 rounded-md font-medium"
                               style={{ backgroundColor: `#${label.color}22`, color: `#${label.color}` }}
                             >
                               {label.name}
