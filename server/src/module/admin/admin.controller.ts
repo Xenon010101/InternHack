@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { validateRequestData } from "../../utils/validation.utils.js";
 import type { AdminService } from "./admin.service.js";
@@ -1059,7 +1060,16 @@ export class AdminController {
 
       const apiKey = req.headers["x-api-key"];
       const expectedKey = process.env["EXTERNAL_JOB_API_KEY"];
-      if (!expectedKey || apiKey !== expectedKey) {
+      if (!expectedKey || !apiKey || typeof apiKey !== "string") {
+        logger.warn("[ingestExternalJob] auth failed", {
+          expectedKeySet: !!expectedKey,
+          receivedKeyPresent: !!apiKey,
+        });
+        return res.status(401).json({ message: "Invalid or missing API key" });
+      }
+      const apiKeyBuf = Buffer.from(apiKey);
+      const expectedBuf = Buffer.from(expectedKey);
+      if (apiKeyBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(apiKeyBuf, expectedBuf)) {
         logger.warn("[ingestExternalJob] auth failed", {
           expectedKeySet: !!expectedKey,
           receivedKeyPresent: !!apiKey,
